@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nightly Focus</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background: #0d0d0d; }
+    textarea { resize: none; }
+    textarea:focus { outline: none; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .tab { cursor: pointer; padding: 6px 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; border-bottom: 1px solid transparent; transition: all 0.2s; color: #555; user-select: none; }
+    .tab.active { color: #e8e4d9; border-bottom-color: #e8e4d9; }
+    .tab:hover { color: #999; }
+    .entry { border-bottom: 1px solid #1a1a1a; padding: 18px 0; animation: fi 0.3s ease; }
+    .entry:last-child { border-bottom: none; }
+    @keyframes fi { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .save-btn { background: #e8e4d9; color: #0d0d0d; border: none; padding: 10px 28px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: opacity 0.2s; }
+    .save-btn:hover:not(:disabled) { opacity: 0.85; }
+    .save-btn:disabled { opacity: 0.4; cursor: default; }
+    .insight-btn { background: transparent; color: #555; border: 1px solid #2a2a2a; padding: 8px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; }
+    .insight-btn:hover:not(:disabled) { color: #e8e4d9; border-color: #555; }
+    .insight-btn:disabled { opacity: 0.4; cursor: default; }
+    .ghost-btn { background: transparent; color: #444; border: none; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; cursor: pointer; transition: color 0.2s; text-transform: uppercase; padding: 0; }
+    .ghost-btn:hover { color: #888; }
+    .key-input { width: 100%; background: #111; border: 1px solid #1e1e1e; color: #e8e4d9; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 10px 14px; letter-spacing: 0.04em; }
+    .key-input:focus { outline: none; border-color: #333; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const STORAGE_KEY = "nightly-focus-log";
+    const API_KEY_STORAGE = "nightly-focus-api-key";
+    const PROMPT = "What is the one problem you want to work on tomorrow?";
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleDateString("en-US", {
+        weekday: "short", month: "short", day: "numeric", year: "numeric"
+      });
+    }
+    function formatTime(iso) {
+      return new Date(iso).toLocaleTimeString("en-US", {
+        hour: "numeric", minute: "2-digit"
+      });
+    }
+
+    function loadEntries() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch { return []; }
+    }
+    function saveEntries(entries) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+
+    function App() {
+      const [entries, setEntries] = useState(loadEntries);
+      const [input, setInput] = useState("");
+      const [saved, setSaved] = useState(false);
+      const [view, setView] = useState("prompt");
+      const [insight, setInsight] = useState("");
+      const [loadingInsight, setLoadingInsight] = useState(false);
+      const [insightError, setInsightError] = useState("");
+      const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+      const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || "");
+      const textareaRef = useRef(null);
+
+      useEffect(() => {
+        if (view === "prompt" && textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, [view]);
+
+      const save = () => {
+        if (!input.trim()) return;
+        const entry = { id: Date.now(), ts: new Date().toISOString(), text: input.trim() };
+        const next = [entry, ...entries];
+        setEntries(next);
+        saveEntries(next);
+        setInput("");
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      };
+
+      const saveApiKey = (key) => {
+        setApiKey(key);
+        localStorage.setItem(API_KEY_STORAGE, key);
+      };
+
+      const getInsight = async () => {
+        if (entries.length < 3) return;
+        if (!apiKey.trim()) {
+          setShowApiKeyInput(true);
+          setInsightError("Enter your Anthropic API key above to enable pattern analysis.");
+          return;
+        }
+        setLoadingInsight(true);
+        setInsight("");
+        setInsightError("");
+        try {
+          const log = entries
+            .slice(0, 20)
+            .map((e, i) => `${i + 1}. [${formatDate(e.ts)}] ${e.text}`)
+            .join("\n");
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey.trim(),
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-5-20251001",
+              max_tokens: 300,
+              messages: [{
+                role: "user",
+                content: `Here are my recent nightly focus entries — the one problem I chose to focus on each day:\n\n${log}\n\nIn 2-3 sentences, what patterns do you notice? What does this tell me about where my attention actually lives?`
+              }]
+            })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          setInsight(data.content[0].text);
+        } catch (e) {
+          setInsightError(`Error: ${e.message}`);
+        }
+        setLoadingInsight(false);
+      };
+
+      const today = new Date().toLocaleDateString("en-US", {
+        weekday: "long", month: "long", day: "numeric"
+      });
+
+      return (
+        <div style={{
+          minHeight: "100vh",
+          background: "#0d0d0d",
+          color: "#e8e4d9",
+          fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: "48px 24px 80px",
+        }}>
+          <div style={{ width: "100%", maxWidth: 560 }}>
+
+            {/* Header */}
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ fontSize: 10, letterSpacing: "0.2em", color: "#3a3a3a", textTransform: "uppercase", marginBottom: 8 }}>
+                Nightly Focus
+              </div>
+              <div style={{ fontSize: 13, color: "#555" }}>{today}</div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 28, marginBottom: 36, borderBottom: "1px solid #1a1a1a" }}>
+              <div className={`tab ${view === "prompt" ? "active" : ""}`} onClick={() => setView("prompt")}>
+                Tonight
+              </div>
+              <div className={`tab ${view === "log" ? "active" : ""}`} onClick={() => setView("log")}>
+                Log {entries.length > 0 ? `(${entries.length})` : ""}
+              </div>
+            </div>
+
+            {/* Tonight view */}
+            {view === "prompt" && (
+              <div style={{ animation: "fi 0.3s ease" }}>
+                <div style={{
+                  fontSize: 18,
+                  lineHeight: 1.65,
+                  color: "#c8c4b8",
+                  marginBottom: 32,
+                  fontWeight: 300,
+                }}>
+                  {PROMPT}
+                </div>
+
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") save(); }}
+                  placeholder="Write it out..."
+                  rows={5}
+                  style={{
+                    width: "100%",
+                    background: "#111",
+                    border: "1px solid #1e1e1e",
+                    color: "#e8e4d9",
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 13,
+                    padding: "16px",
+                    lineHeight: 1.7,
+                    marginBottom: 20,
+                  }}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <button className="save-btn" onClick={save} disabled={!input.trim()}>
+                    {saved ? "✓ Saved" : "Save"}
+                  </button>
+                  <span style={{ fontSize: 10, color: "#2a2a2a", letterSpacing: "0.08em" }}>⌘ + Enter</span>
+                </div>
+
+                {entries.length > 0 && (
+                  <div style={{ marginTop: 48, paddingTop: 24, borderTop: "1px solid #1a1a1a" }}>
+                    <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>
+                      Last entry
+                    </div>
+                    <div style={{ fontSize: 12, color: "#555", lineHeight: 1.7 }}>
+                      <span style={{ color: "#3a3a3a", fontSize: 10 }}>{formatDate(entries[0].ts)} · </span>
+                      {entries[0].text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Log view */}
+            {view === "log" && (
+              <div style={{ animation: "fi 0.3s ease" }}>
+                {entries.length === 0 ? (
+                  <div style={{ color: "#333", fontSize: 13 }}>No entries yet.</div>
+                ) : (
+                  <>
+                    {entries.map(e => (
+                      <div key={e.id} className="entry">
+                        <div style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.12em", marginBottom: 8 }}>
+                          {formatDate(e.ts)} · {formatTime(e.ts)}
+                        </div>
+                        <div style={{ fontSize: 13, lineHeight: 1.75, color: "#a8a49a" }}>{e.text}</div>
+                      </div>
+                    ))}
+
+                    {entries.length >= 3 && (
+                      <div style={{ marginTop: 36 }}>
+                        {showApiKeyInput && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+                              Anthropic API Key
+                            </div>
+                            <input
+                              className="key-input"
+                              type="password"
+                              value={apiKey}
+                              onChange={e => saveApiKey(e.target.value)}
+                              placeholder="sk-ant-..."
+                              spellCheck={false}
+                            />
+                            <div style={{ fontSize: 10, color: "#2e2e2e", marginTop: 6 }}>
+                              Stored locally in your browser. Never sent anywhere except Anthropic.
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight}>
+                            {loadingInsight ? "Analyzing..." : "→ Find patterns"}
+                          </button>
+                          {!showApiKeyInput && (
+                            <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>
+                              API key
+                            </button>
+                          )}
+                        </div>
+
+                        {insightError && (
+                          <div style={{ marginTop: 16, fontSize: 12, color: "#5a3a3a", fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.6 }}>
+                            {insightError}
+                          </div>
+                        )}
+
+                        {insight && (
+                          <div style={{
+                            marginTop: 20,
+                            padding: 16,
+                            background: "#111",
+                            border: "1px solid #1a1a1a",
+                            fontSize: 13,
+                            lineHeight: 1.85,
+                            color: "#888",
+                            animation: "fi 0.4s ease"
+                          }}>
+                            {insight}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {entries.length < 3 && (
+                      <div style={{ marginTop: 32, fontSize: 11, color: "#2e2e2e", letterSpacing: "0.06em" }}>
+                        {3 - entries.length} more {entries.length === 2 ? "entry" : "entries"} until pattern analysis unlocks.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
