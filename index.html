@@ -113,6 +113,13 @@
       return { wakingThoughts: "", categories: [], ideas: "", relatedToFocus: false };
     }
 
+    // Returns the array of waking log entries for an entry, handling legacy single morningLog
+    function getMorningLogs(entry) {
+      if (entry.morningLogs?.length) return entry.morningLogs;
+      if (entry.morningLog) return [{ id: entry.morningLog.ts || "legacy", ...entry.morningLog }];
+      return [];
+    }
+
     function App() {
       const [entries, setEntries] = useState(loadEntries);
       const [view, setView] = useState("tonight");
@@ -121,11 +128,16 @@
       const [nightInput, setNightInput] = useState("");
       const [nightSaved, setNightSaved] = useState(false);
 
-      // Morning
-      const [morning, setMorning] = useState(blankMorning);
-      const [morningSaved, setMorningSaved] = useState(false);
-      const [morningEditing, setMorningEditing] = useState(false);
-      const [customTag, setCustomTag] = useState("");
+      // Morning — waking entries
+      const [wakingDraft, setWakingDraft] = useState(null); // null = read mode
+      const [editingWakingId, setEditingWakingId] = useState(null); // "new" or existing waking id
+      const [wakingCustomTag, setWakingCustomTag] = useState("");
+      const [wakingSaved, setWakingSaved] = useState(false);
+
+      // Log — category editing
+      const [editingLogCat, setEditingLogCat] = useState(null); // { entryId, wakingId }
+      const [logCatDraft, setLogCatDraft] = useState([]);
+      const [logCatCustomTag, setLogCatCustomTag] = useState("");
 
       // Log — edit
       const [editingId, setEditingId] = useState(null);
@@ -150,15 +162,8 @@
         if (view === "tonight" && nightTextareaRef.current) nightTextareaRef.current.focus();
       }, [view]);
 
-      // Load morning state if the most recent active entry already has a morning log
       const activeEntries = entries.filter(e => !e.deleted);
       const mostRecent = activeEntries[0] || null;
-
-      useEffect(() => {
-        if (mostRecent?.morningLog && !morningEditing) {
-          setMorning({ ...blankMorning(), ...mostRecent.morningLog });
-        }
-      }, [mostRecent?.id]);
 
       // ── Tonight ──────────────────────────────────────────────
       const saveNight = () => {
@@ -177,34 +182,86 @@
         setTimeout(() => setNightSaved(false), 2000);
       };
 
-      // ── Morning ───────────────────────────────────────────────
-      const toggleCategory = (cat) => {
-        setMorning(m => ({
-          ...m,
-          categories: m.categories.includes(cat)
-            ? m.categories.filter(c => c !== cat)
-            : [...m.categories, cat]
+      // ── Morning — waking entries ──────────────────────────────
+      const startNewWaking = () => {
+        setWakingDraft(blankMorning());
+        setEditingWakingId("new");
+      };
+
+      const startEditWaking = (w) => {
+        setWakingDraft({ wakingThoughts: w.wakingThoughts, categories: [...w.categories], ideas: w.ideas, relatedToFocus: w.relatedToFocus });
+        setEditingWakingId(w.id);
+      };
+
+      const cancelWaking = () => { setWakingDraft(null); setEditingWakingId(null); setWakingCustomTag(""); };
+
+      const toggleWakingCategory = (cat) => {
+        setWakingDraft(d => ({
+          ...d,
+          categories: d.categories.includes(cat) ? d.categories.filter(c => c !== cat) : [...d.categories, cat]
         }));
       };
 
-      const addCustomTag = () => {
-        const tag = customTag.trim();
-        if (!tag || morning.categories.includes(tag)) { setCustomTag(""); return; }
-        setMorning(m => ({ ...m, categories: [...m.categories, tag] }));
-        setCustomTag("");
+      const addWakingCustomTag = () => {
+        const tag = wakingCustomTag.trim();
+        if (!tag || wakingDraft.categories.includes(tag)) { setWakingCustomTag(""); return; }
+        setWakingDraft(d => ({ ...d, categories: [...d.categories, tag] }));
+        setWakingCustomTag("");
       };
 
-      const saveMorning = () => {
+      const saveWaking = () => {
         if (!mostRecent) return;
-        const log = { ...morning, ts: new Date().toISOString() };
+        const existing = getMorningLogs(mostRecent);
+        const log = { ...wakingDraft, ts: new Date().toISOString() };
+        let updated;
+        if (editingWakingId === "new") {
+          log.id = String(Date.now());
+          updated = [...existing, log];
+        } else {
+          updated = existing.map(w => w.id === editingWakingId ? { ...w, ...log } : w);
+        }
         const next = entries.map(e =>
-          e.id === mostRecent.id ? { ...e, morningLog: log } : e
+          e.id === mostRecent.id ? { ...e, morningLogs: updated } : e
         );
         setEntries(next);
         persistEntries(next);
-        setMorningSaved(true);
-        setMorningEditing(false);
-        setTimeout(() => setMorningSaved(false), 2000);
+        cancelWaking();
+        setWakingSaved(true);
+        setTimeout(() => setWakingSaved(false), 2000);
+      };
+
+      // ── Log — category editing ────────────────────────────────
+      const startLogCatEdit = (entryId, w) => {
+        setEditingLogCat({ entryId, wakingId: w.id });
+        setLogCatDraft([...w.categories]);
+        setLogCatCustomTag("");
+      };
+
+      const cancelLogCatEdit = () => { setEditingLogCat(null); setLogCatDraft([]); setLogCatCustomTag(""); };
+
+      const toggleLogCat = (cat) => {
+        setLogCatDraft(d => d.includes(cat) ? d.filter(c => c !== cat) : [...d, cat]);
+      };
+
+      const addLogCatCustomTag = () => {
+        const tag = logCatCustomTag.trim();
+        if (!tag || logCatDraft.includes(tag)) { setLogCatCustomTag(""); return; }
+        setLogCatDraft(d => [...d, tag]);
+        setLogCatCustomTag("");
+      };
+
+      const saveLogCat = () => {
+        if (!editingLogCat) return;
+        const { entryId, wakingId } = editingLogCat;
+        const next = entries.map(e => {
+          if (e.id !== entryId) return e;
+          const logs = getMorningLogs(e);
+          const updated = logs.map(w => w.id === wakingId ? { ...w, categories: logCatDraft } : w);
+          return { ...e, morningLogs: updated };
+        });
+        setEntries(next);
+        persistEntries(next);
+        cancelLogCatEdit();
       };
 
       // ── Log — edit ────────────────────────────────────────────
@@ -276,11 +333,11 @@
         try {
           const log = visible.slice(0, 20).map((e, i) => {
             let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
-            if (e.morningLog) {
-              line += `\n   [Morning ${formatShortDate(e.morningLog.ts)}] Woke thinking: "${e.morningLog.wakingThoughts}"`;
-              if (e.morningLog.categories.length) line += ` | Categories: ${e.morningLog.categories.join(", ")}`;
-              if (e.morningLog.ideas) line += `\n   Ideas: "${e.morningLog.ideas}"`;
-            }
+            getMorningLogs(e).forEach((w, wi) => {
+              line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
+              if (w.categories.length) line += ` | Categories: ${w.categories.join(", ")}`;
+              if (w.ideas) line += `\n   Ideas: "${w.ideas}"`;
+            });
             return line;
           }).join("\n\n");
 
@@ -311,8 +368,8 @@
       // ── Derived ───────────────────────────────────────────────
       const archivedEntries = entries.filter(e => e.deleted);
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-      const morningHasContent = morning.wakingThoughts.trim() || morning.ideas.trim() || morning.categories.length > 0;
-      const mostRecentHasMorning = mostRecent?.morningLog && !morningEditing;
+      const wakingDraftHasContent = wakingDraft && (wakingDraft.wakingThoughts.trim() || wakingDraft.ideas.trim() || wakingDraft.categories.length > 0);
+      const mostRecentWakings = getMorningLogs(mostRecent || {});
 
       // ── Render ────────────────────────────────────────────────
       return (
@@ -375,117 +432,116 @@
                 ) : (
                   <>
                     {/* Context bar */}
-                    <div style={{ marginBottom: 32, padding: "12px 16px", background: "#0f0f0f", borderLeft: "2px solid #1e1e1e" }}>
+                    <div style={{ marginBottom: 28, padding: "12px 16px", background: "#0f0f0f", borderLeft: "2px solid #1e1e1e" }}>
                       <div className="field-label" style={{ marginBottom: 6 }}>Last night's focus</div>
                       <div style={{ fontSize: 13, color: "#888", lineHeight: 1.6 }}>{mostRecent.text}</div>
                     </div>
 
-                    {mostRecentHasMorning ? (
-                      /* Read mode */
-                      <div>
-                        <div style={{ marginBottom: 24 }}>
-                          <div className="field-label">Waking thoughts</div>
-                          <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7 }}>{mostRecent.morningLog.wakingThoughts || <span style={{ color: "#555" }}>—</span>}</div>
-                        </div>
-                        {mostRecent.morningLog.categories.length > 0 && (
-                          <div style={{ marginBottom: 24 }}>
-                            <div className="field-label">Categories</div>
-                            <div style={{ display: "flex", flexWrap: "wrap" }}>
-                              {mostRecent.morningLog.categories.map(c => (
-                                <span key={c} className="chip selected" style={{ cursor: "default" }}>{c}</span>
-                              ))}
+                    {/* Saved waking entries */}
+                    {mostRecentWakings.map((w, i) => (
+                      <div key={w.id}>
+                        {editingWakingId === w.id ? (
+                          /* Edit form for this entry */
+                          <div style={{ marginBottom: 20, padding: "16px", background: "#0f0f0f", borderLeft: "1px solid #2a2a2a", animation: "fi 0.2s ease" }}>
+                            <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.1em", marginBottom: 16 }}>
+                              Waking {mostRecentWakings.length > 1 ? `${i + 1} · ` : ""}editing
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                              <div className="field-label">What were you thinking about when you woke up?</div>
+                              <textarea className="text-area" value={wakingDraft.wakingThoughts} onChange={e => setWakingDraft(d => ({ ...d, wakingThoughts: e.target.value }))} placeholder="Describe what was on your mind..." rows={4} autoFocus />
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                              <div className="field-label">Categories</div>
+                              <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}>
+                                {CATEGORIES.map(cat => (
+                                  <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>
+                                ))}
+                                {wakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
+                                  <div key={c} className="chip selected" onClick={() => toggleWakingCategory(c)}>{c} ×</div>
+                                ))}
+                              </div>
+                              <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" />
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                              <div className="field-label">Thoughts or ideas to capture</div>
+                              <textarea className="text-area" value={wakingDraft.ideas} onChange={e => setWakingDraft(d => ({ ...d, ideas: e.target.value }))} placeholder="Any ideas, threads, or insights that surfaced..." rows={4} />
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                              <div className="toggle-row" onClick={() => setWakingDraft(d => ({ ...d, relatedToFocus: !d.relatedToFocus }))}>
+                                <div className={`toggle-box ${wakingDraft.relatedToFocus ? "checked" : ""}`} />
+                                <span style={{ fontSize: 12, color: wakingDraft.relatedToFocus ? "#c8c4b8" : "#777", letterSpacing: "0.04em" }}>Related to last night's focus</span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                              <button className="save-btn" style={{ padding: "8px 20px", fontSize: 11 }} onClick={saveWaking} disabled={!wakingDraftHasContent}>Save</button>
+                              <button className="ghost-btn" onClick={cancelWaking}>Cancel</button>
                             </div>
                           </div>
-                        )}
-                        {mostRecent.morningLog.ideas && (
-                          <div style={{ marginBottom: 24 }}>
-                            <div className="field-label">Ideas captured</div>
-                            <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7 }}>{mostRecent.morningLog.ideas}</div>
+                        ) : (
+                          /* Read view */
+                          <div style={{ marginBottom: 12, padding: "12px 14px", background: "#0f0f0f", borderLeft: "1px solid #1e1e1e" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                              <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.1em" }}>
+                                {mostRecentWakings.length > 1 ? `Waking ${i + 1} · ` : "Waking · "}{formatTime(w.ts)}
+                              </div>
+                              {!editingWakingId && <button className="ghost-btn" onClick={() => startEditWaking(w)}>Edit</button>}
+                            </div>
+                            {w.wakingThoughts && <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 6 }}>{w.wakingThoughts}</div>}
+                            {w.categories.length > 0 && <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>{w.categories.join(" · ")}</div>}
+                            {w.ideas && <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 4, fontStyle: "italic" }}>{w.ideas}</div>}
+                            {w.relatedToFocus && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 6 }}>related to focus</div>}
                           </div>
                         )}
-                        <div style={{ marginBottom: 28 }}>
-                          <div className="field-label">Related to focus</div>
-                          <div style={{ fontSize: 13, color: mostRecent.morningLog.relatedToFocus ? "#888" : "#666" }}>
-                            {mostRecent.morningLog.relatedToFocus ? "Yes" : "No"}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                          <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>
-                            logged {formatTime(mostRecent.morningLog.ts)}
-                          </div>
-                          <button className="ghost-btn" onClick={() => { setMorning({ ...blankMorning(), ...mostRecent.morningLog }); setMorningEditing(true); }}>
-                            Edit
-                          </button>
-                        </div>
                       </div>
-                    ) : (
-                      /* Edit / entry mode */
-                      <>
-                        <div style={{ marginBottom: 24 }}>
-                          <div className="field-label">What were you thinking about when you woke up?</div>
-                          <textarea
-                            className="text-area"
-                            value={morning.wakingThoughts}
-                            onChange={e => setMorning(m => ({ ...m, wakingThoughts: e.target.value }))}
-                            placeholder="Describe what was on your mind..."
-                            rows={4}
-                          />
-                        </div>
+                    ))}
 
-                        <div style={{ marginBottom: 24 }}>
+                    {/* New waking entry form */}
+                    {editingWakingId === "new" && (
+                      <div style={{ marginBottom: 20, padding: "16px", background: "#0f0f0f", borderLeft: "1px solid #2a2a2a", animation: "fi 0.2s ease" }}>
+                        <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.1em", marginBottom: 16 }}>
+                          {mostRecentWakings.length > 0 ? `Waking ${mostRecentWakings.length + 1}` : "Waking"}
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
+                          <div className="field-label">What were you thinking about when you woke up?</div>
+                          <textarea className="text-area" value={wakingDraft.wakingThoughts} onChange={e => setWakingDraft(d => ({ ...d, wakingThoughts: e.target.value }))} placeholder="Describe what was on your mind..." rows={4} autoFocus />
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
                           <div className="field-label">Categories</div>
                           <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}>
                             {CATEGORIES.map(cat => (
-                              <div key={cat} className={`chip ${morning.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleCategory(cat)}>
-                                {cat}
-                              </div>
+                              <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>
                             ))}
-                            {morning.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
-                              <div key={c} className="chip selected" onClick={() => toggleCategory(c)}>{c} ×</div>
+                            {wakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
+                              <div key={c} className="chip selected" onClick={() => toggleWakingCategory(c)}>{c} ×</div>
                             ))}
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <input
-                              className="tag-input"
-                              value={customTag}
-                              onChange={e => setCustomTag(e.target.value)}
-                              onKeyDown={e => { if (e.key === "Enter") addCustomTag(); }}
-                              placeholder="+ custom tag"
-                            />
-                          </div>
+                          <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" />
                         </div>
-
-                        <div style={{ marginBottom: 24 }}>
+                        <div style={{ marginBottom: 20 }}>
                           <div className="field-label">Thoughts or ideas to capture</div>
-                          <textarea
-                            className="text-area"
-                            value={morning.ideas}
-                            onChange={e => setMorning(m => ({ ...m, ideas: e.target.value }))}
-                            placeholder="Any ideas, threads, or insights that surfaced..."
-                            rows={4}
-                          />
+                          <textarea className="text-area" value={wakingDraft.ideas} onChange={e => setWakingDraft(d => ({ ...d, ideas: e.target.value }))} placeholder="Any ideas, threads, or insights that surfaced..." rows={4} />
                         </div>
-
-                        <div style={{ marginBottom: 32 }}>
-                          <div className="toggle-row" onClick={() => setMorning(m => ({ ...m, relatedToFocus: !m.relatedToFocus }))}>
-                            <div className={`toggle-box ${morning.relatedToFocus ? "checked" : ""}`} />
-                            <span style={{ fontSize: 12, color: morning.relatedToFocus ? "#c8c4b8" : "#777", letterSpacing: "0.04em" }}>
-                              Related to last night's focus
-                            </span>
+                        <div style={{ marginBottom: 20 }}>
+                          <div className="toggle-row" onClick={() => setWakingDraft(d => ({ ...d, relatedToFocus: !d.relatedToFocus }))}>
+                            <div className={`toggle-box ${wakingDraft.relatedToFocus ? "checked" : ""}`} />
+                            <span style={{ fontSize: 12, color: wakingDraft.relatedToFocus ? "#c8c4b8" : "#777", letterSpacing: "0.04em" }}>Related to last night's focus</span>
                           </div>
                         </div>
-
-                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          <button className="save-btn" onClick={saveMorning} disabled={!morningHasContent}>
-                            {morningSaved ? "✓ Saved" : "Save morning log"}
-                          </button>
-                          {morningEditing && (
-                            <button className="ghost-btn" onClick={() => { setMorningEditing(false); setMorning({ ...blankMorning(), ...mostRecent.morningLog }); }}>
-                              Cancel
-                            </button>
-                          )}
+                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                          <button className="save-btn" style={{ padding: "8px 20px", fontSize: 11 }} onClick={saveWaking} disabled={!wakingDraftHasContent}>Save</button>
+                          <button className="ghost-btn" onClick={cancelWaking}>Cancel</button>
                         </div>
-                      </>
+                      </div>
+                    )}
+
+                    {/* Add waking entry button */}
+                    {!editingWakingId && (
+                      <div style={{ marginTop: mostRecentWakings.length > 0 ? 8 : 0, display: "flex", alignItems: "center", gap: 14 }}>
+                        <button className="ghost-btn accent" onClick={startNewWaking}>
+                          + {mostRecentWakings.length > 0 ? "Add another waking" : "Log waking thoughts"}
+                        </button>
+                        {wakingSaved && <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>✓ saved</span>}
+                      </div>
                     )}
                   </>
                 )}
@@ -537,29 +593,54 @@
                           <div style={{ fontSize: 13, lineHeight: 1.75, color: "#a8a49a" }}>{entry.text}</div>
                         )}
 
-                        {/* Morning log block */}
-                        {entry.morningLog && editingId !== entry.id && (
-                          <div className="morning-block">
-                            <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", marginBottom: 8 }}>
-                              Morning · {formatTime(entry.morningLog.ts)}
+                        {/* Morning waking log blocks */}
+                        {getMorningLogs(entry).length > 0 && editingId !== entry.id && getMorningLogs(entry).map((w, wi) => {
+                          const isEditingCat = editingLogCat?.entryId === entry.id && editingLogCat?.wakingId === w.id;
+                          const wLogs = getMorningLogs(entry);
+                          return (
+                            <div key={w.id} className="morning-block">
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                                <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em" }}>
+                                  {wLogs.length > 1 ? `Waking ${wi + 1} · ` : "Morning · "}{formatTime(w.ts)}
+                                </div>
+                                {!isEditingCat && !editingLogCat && (
+                                  <button className="ghost-btn" onClick={() => startLogCatEdit(entry.id, w)}>Edit categories</button>
+                                )}
+                              </div>
+                              {w.wakingThoughts && (
+                                <div style={{ fontSize: 12, color: "#666", lineHeight: 1.7, marginBottom: 6 }}>"{w.wakingThoughts}"</div>
+                              )}
+                              {isEditingCat ? (
+                                <div style={{ marginTop: 8 }}>
+                                  <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
+                                    {CATEGORIES.map(cat => (
+                                      <div key={cat} className={`chip ${logCatDraft.includes(cat) ? "selected" : ""}`} onClick={() => toggleLogCat(cat)}>{cat}</div>
+                                    ))}
+                                    {logCatDraft.filter(c => !CATEGORIES.includes(c)).map(c => (
+                                      <div key={c} className="chip selected" onClick={() => toggleLogCat(c)}>{c} ×</div>
+                                    ))}
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                                    <input className="tag-input" value={logCatCustomTag} onChange={e => setLogCatCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLogCatCustomTag(); }} placeholder="+ custom tag" />
+                                  </div>
+                                  <div style={{ display: "flex", gap: 12 }}>
+                                    <button className="save-btn" style={{ padding: "6px 16px", fontSize: 10 }} onClick={saveLogCat}>Save</button>
+                                    <button className="ghost-btn" onClick={cancelLogCatEdit}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                w.categories.length > 0 && (
+                                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>
+                                    {w.categories.join(" · ")}
+                                  </div>
+                                )
+                              )}
+                              {w.ideas && (
+                                <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 6, fontStyle: "italic" }}>{w.ideas}</div>
+                              )}
                             </div>
-                            {entry.morningLog.wakingThoughts && (
-                              <div style={{ fontSize: 12, color: "#666", lineHeight: 1.7, marginBottom: 6 }}>
-                                "{entry.morningLog.wakingThoughts}"
-                              </div>
-                            )}
-                            {entry.morningLog.categories.length > 0 && (
-                              <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>
-                                {entry.morningLog.categories.join(" · ")}
-                              </div>
-                            )}
-                            {entry.morningLog.ideas && (
-                              <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 6, fontStyle: "italic" }}>
-                                {entry.morningLog.ideas}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          );
+                        })}
 
                         {/* History */}
                         {entry.history?.length > 0 && editingId !== entry.id && (
