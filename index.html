@@ -88,6 +88,16 @@
     const API_KEY_STORAGE = "nightly-focus-api-key";
     const NIGHT_PROMPT = "What is the one problem you want to work on tomorrow?";
     const CATEGORIES = ["Last night's problem", "Work", "Personal", "Health", "Creative", "Relationships", "Other"];
+    const PATTERNS_STORAGE = "nightly-focus-patterns-v1";
+    const HAIKU_INPUT_COST_PER_M  = 0.80;  // $/1M tokens (claude-haiku-4-5)
+    const HAIKU_OUTPUT_COST_PER_M = 4.00;
+    const TIME_BOX_OPTIONS = [
+      { value: "week",    label: "last week"    },
+      { value: "month",   label: "last month"   },
+      { value: "quarter", label: "last quarter" },
+      { value: "year",    label: "last year"    },
+      { value: "all",     label: "all time"     },
+    ];
 
     function formatDate(iso) {
       return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -97,6 +107,22 @@
     }
     function formatShortDate(iso) {
       return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+
+    function getTimeBoxStart(box) {
+      const now = new Date();
+      if (box === "week")    return new Date(now - 7 * 24 * 60 * 60 * 1000);
+      if (box === "month")   { const d = new Date(now); d.setMonth(d.getMonth() - 1);       return d; }
+      if (box === "quarter") { const d = new Date(now); d.setMonth(d.getMonth() - 3);       return d; }
+      if (box === "year")    { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; }
+      return null; // "all"
+    }
+    function calcCost(input, output) {
+      return (input / 1e6) * HAIKU_INPUT_COST_PER_M + (output / 1e6) * HAIKU_OUTPUT_COST_PER_M;
+    }
+    function formatCost(usd) {
+      if (usd < 0.0001) return "<$0.0001";
+      return `$${usd.toFixed(4)}`;
     }
 
     function loadEntries() {
@@ -155,6 +181,12 @@
       const [insightError, setInsightError] = useState("");
       const [showApiKeyInput, setShowApiKeyInput] = useState(false);
       const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || "");
+      const [patternTimeBox, setPatternTimeBox] = useState("month");
+      const [patternHistory, setPatternHistory] = useState(() => {
+        try { const r = localStorage.getItem(PATTERNS_STORAGE); return r ? JSON.parse(r) : []; } catch { return []; }
+      });
+      const [showPatternHistory, setShowPatternHistory] = useState(false);
+      const [lastUsage, setLastUsage] = useState(null);
 
       const nightTextareaRef = useRef(null);
 
@@ -326,12 +358,12 @@
       const saveApiKey = (k) => { setApiKey(k); localStorage.setItem(API_KEY_STORAGE, k); };
 
       const getInsight = async () => {
-        const visible = entries.filter(e => !e.deleted);
-        if (visible.length < 3) return;
+        if (timeBoxEntries.length < 3) return;
         if (!apiKey.trim()) { setShowApiKeyInput(true); setInsightError("Enter your Anthropic API key above to enable pattern analysis."); return; }
-        setLoadingInsight(true); setInsight(""); setInsightError("");
+        setLoadingInsight(true); setInsight(""); setInsightError(""); setLastUsage(null);
         try {
-          const log = visible.slice(0, 20).map((e, i) => {
+          const sliced = timeBoxEntries.slice(0, 20);
+          const log = sliced.map((e, i) => {
             let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
             getMorningLogs(e).forEach((w, wi) => {
               line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
@@ -360,7 +392,25 @@
           });
           if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
           const data = await res.json();
-          setInsight(data.content[0].text);
+          const text = data.content[0].text;
+          const usage = {
+            inputTokens:  data.usage?.input_tokens  ?? 0,
+            outputTokens: data.usage?.output_tokens ?? 0,
+          };
+          usage.costUsd = calcCost(usage.inputTokens, usage.outputTokens);
+          setInsight(text);
+          setLastUsage(usage);
+          const record = {
+            id: String(Date.now()),
+            ts: new Date().toISOString(),
+            timeBox: patternTimeBox,
+            entriesCount: sliced.length,
+            insight: text,
+            usage,
+          };
+          const nextHistory = [record, ...patternHistory];
+          setPatternHistory(nextHistory);
+          localStorage.setItem(PATTERNS_STORAGE, JSON.stringify(nextHistory));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
       };
@@ -370,6 +420,9 @@
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
       const wakingDraftHasContent = wakingDraft && (wakingDraft.wakingThoughts.trim() || wakingDraft.ideas.trim() || wakingDraft.categories.length > 0);
       const mostRecentWakings = getMorningLogs(mostRecent || {});
+      const timeBoxStart = getTimeBoxStart(patternTimeBox);
+      const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
+      const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
 
       // ── Render ────────────────────────────────────────────────
       return (
@@ -700,6 +753,33 @@
                     {/* Pattern analysis */}
                     {activeEntries.length >= 3 && (
                       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid #161616" }}>
+
+                        {/* Time box selector */}
+                        <div style={{ marginBottom: 18 }}>
+                          <div className="field-label" style={{ marginBottom: 8 }}>Analyze entries from</div>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            {TIME_BOX_OPTIONS.map(opt => (
+                              <button
+                                key={opt.value}
+                                className="ghost-btn"
+                                style={{
+                                  color: patternTimeBox === opt.value ? "#e8e4d9" : "#555",
+                                  borderBottom: patternTimeBox === opt.value ? "1px solid #666" : "1px solid transparent",
+                                  paddingBottom: 2,
+                                }}
+                                onClick={() => { setPatternTimeBox(opt.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                            {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
+                            {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
+                            {timeBoxEntries.length === 0 && " · no entries in this range"}
+                          </div>
+                        </div>
+
                         {showApiKeyInput && (
                           <div style={{ marginBottom: 16 }}>
                             <div className="field-label">Anthropic API Key</div>
@@ -708,7 +788,7 @@
                           </div>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight}>
+                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
                             {loadingInsight ? "Analyzing..." : "→ Find patterns"}
                           </button>
                           {!showApiKeyInput && (
@@ -717,8 +797,52 @@
                         </div>
                         {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                         {insight && (
-                          <div style={{ marginTop: 20, padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777", animation: "fi 0.4s ease" }}>
-                            {insight}
+                          <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
+                            <div style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}>
+                              {insight}
+                            </div>
+                            {lastUsage && (
+                              <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
+                                <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
+                                <span>est. {formatCost(lastUsage.costUsd)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Pattern history */}
+                        {patternHistory.length > 0 && (
+                          <div style={{ marginTop: 28 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
+                                {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
+                              </button>
+                              {totalCostUsd > 0 && (
+                                <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
+                                  total est. {formatCost(totalCostUsd)}
+                                </span>
+                              )}
+                            </div>
+                            {showPatternHistory && (
+                              <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
+                                {patternHistory.map(rec => (
+                                  <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
+                                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+                                      <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
+                                      <span style={{ fontSize: 10, color: "#444" }}>
+                                        {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
+                                      </span>
+                                      {rec.usage?.inputTokens != null && (
+                                        <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                                          {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}>{rec.insight}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
