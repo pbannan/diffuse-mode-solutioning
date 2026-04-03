@@ -16,7 +16,7 @@ Each night, you write down the one problem you want your brain to work on overni
 
 The name comes from Barbara Oakley's concept of **diffuse mode thinking** — the relaxed, background mental state (during sleep, exercise, daydreaming) where the brain makes unexpected connections and solves problems it couldn't crack through focused effort alone.
 
-The practice is simple: give your subconscious a specific problem before you go to sleep. Don't force it. Wake up and write down whatever's on your mind before the day crowds it out. Over weeks, patterns emerge — about what actually has your attention, what domains you return to, and what your brain is quietly working through.
+The practice is simple: cue your subconscious with a specific problem before you go to sleep. Don't force it. Wake up and write down whatever's on your mind before the day crowds it out. Over weeks, patterns emerge — about what actually has your attention, what domains you return to, and what your brain is quietly working through.
 
 ## How to use it
 
