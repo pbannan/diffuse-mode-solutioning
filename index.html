@@ -79,6 +79,9 @@
 
     .datetime-input { background: #111; border: 1px solid #1e1e1e; color: #777; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 10px; letter-spacing: 0.04em; color-scheme: dark; }
     .datetime-input:focus { border-color: #333; outline: none; }
+
+    .privacy-panel { margin-top:16px; padding:16px; background:#111; border:1px solid #1a1a1a; animation: fi 0.3s ease; }
+    .privacy-panel pre { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#666; line-height:1.65; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow-y:auto; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:12px; }
   </style>
 </head>
 <body>
@@ -136,11 +139,20 @@
     function loadEntries() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
+        if (!raw) return [];
+        try { return JSON.parse(atob(raw)); } catch { return JSON.parse(raw); } // migrate legacy plain JSON
       } catch { return []; }
     }
     function persistEntries(entries) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+      localStorage.setItem(STORAGE_KEY, btoa(JSON.stringify(entries)));
+    }
+
+    function downloadFile(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
     }
 
     function blankMorning() {
@@ -189,13 +201,24 @@
       const [loadingInsight, setLoadingInsight] = useState(false);
       const [insightError, setInsightError] = useState("");
       const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-      const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || "");
+      const [apiKey, setApiKey] = useState(() => {
+        const stored = localStorage.getItem(API_KEY_STORAGE);
+        if (!stored) return "";
+        try { return atob(stored); } catch { return stored; } // migrate legacy plain key
+      });
+      const [rememberKey, setRememberKey] = useState(() => !!localStorage.getItem(API_KEY_STORAGE));
       const [patternTimeBox, setPatternTimeBox] = useState("month");
       const [patternHistory, setPatternHistory] = useState(() => {
-        try { const r = localStorage.getItem(PATTERNS_STORAGE); return r ? JSON.parse(r) : []; } catch { return []; }
+        try {
+          const r = localStorage.getItem(PATTERNS_STORAGE);
+          if (!r) return [];
+          try { return JSON.parse(atob(r)); } catch { return JSON.parse(r); } // migrate legacy plain JSON
+        } catch { return []; }
       });
       const [showPatternHistory, setShowPatternHistory] = useState(false);
       const [lastUsage, setLastUsage] = useState(null);
+      const [showClearConfirm, setShowClearConfirm] = useState(false);
+      const [pendingSend, setPendingSend] = useState(null); // { log, count } or null
 
       const nightTextareaRef = useRef(null);
 
@@ -372,7 +395,22 @@
       };
 
       // ── Patterns ──────────────────────────────────────────────
-      const saveApiKey = (k) => { setApiKey(k); localStorage.setItem(API_KEY_STORAGE, k); };
+      const saveApiKey = (k) => {
+        setApiKey(k);
+        if (rememberKey) localStorage.setItem(API_KEY_STORAGE, btoa(k));
+        else localStorage.removeItem(API_KEY_STORAGE);
+      };
+      const toggleRememberKey = () => {
+        const next = !rememberKey;
+        setRememberKey(next);
+        if (next && apiKey) localStorage.setItem(API_KEY_STORAGE, btoa(apiKey));
+        else localStorage.removeItem(API_KEY_STORAGE);
+      };
+      const removeStoredKey = () => {
+        localStorage.removeItem(API_KEY_STORAGE);
+        setApiKey("");
+        setRememberKey(false);
+      };
 
       const getInsight = async () => {
         if (timeBoxEntries.length < 3) return;
@@ -427,9 +465,93 @@
           };
           const nextHistory = [record, ...patternHistory];
           setPatternHistory(nextHistory);
-          localStorage.setItem(PATTERNS_STORAGE, JSON.stringify(nextHistory));
+          localStorage.setItem(PATTERNS_STORAGE, btoa(JSON.stringify(nextHistory)));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
+      };
+
+      const previewInsight = () => {
+        if (timeBoxEntries.length < 3) return;
+        if (!apiKey.trim()) { setShowApiKeyInput(true); setInsightError("Enter your Anthropic API key above to enable pattern analysis."); return; }
+        const sliced = timeBoxEntries.slice(0, 20);
+        const log = sliced.map((e, i) => {
+          let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
+          getMorningLogs(e).forEach((w, wi) => {
+            line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
+            if (w.categories.length) line += ` | Categories: ${w.categories.join(", ")}`;
+            if (w.ideas) line += `\n   Ideas: "${w.ideas}"`;
+          });
+          return line;
+        }).join("\n\n");
+        setPendingSend({ log, count: sliced.length });
+      };
+
+      const confirmAndSend = async () => {
+        if (!pendingSend) return;
+        const { log, count } = pendingSend;
+        setPendingSend(null);
+        setLoadingInsight(true); setInsight(""); setInsightError(""); setLastUsage(null);
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey.trim(),
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 350,
+              messages: [{
+                role: "user",
+                content: `Here are my recent nightly focus entries and, where captured, what I was thinking about the next morning:\n\n${log}\n\nIn 2-3 sentences: what patterns do you notice across both the evening intentions and the morning thoughts? What does this suggest about where my attention actually lives?`
+              }]
+            })
+          });
+          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
+          const data = await res.json();
+          const text = data.content[0].text;
+          const usage = { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };
+          usage.costUsd = calcCost(usage.inputTokens, usage.outputTokens);
+          setInsight(text);
+          setLastUsage(usage);
+          const record = { id: String(Date.now()), ts: new Date().toISOString(), timeBox: patternTimeBox, entriesCount: count, insight: text, usage };
+          const nextHistory = [record, ...patternHistory];
+          setPatternHistory(nextHistory);
+          localStorage.setItem(PATTERNS_STORAGE, btoa(JSON.stringify(nextHistory)));
+        } catch (e) { setInsightError(`Error: ${e.message}`); }
+        setLoadingInsight(false);
+      };
+
+      const exportData = (format) => {
+        const date = new Date().toISOString().slice(0, 10);
+        if (format === "json") {
+          const payload = JSON.stringify({ exportedAt: new Date().toISOString(), app: "Diffuse Mode Solutioning", entries: activeEntries }, null, 2);
+          downloadFile(payload, `diffuse-journal-${date}.json`, "application/json");
+        } else {
+          const lines = ["=== DIFFUSE MODE JOURNAL EXPORT ===", `Exported: ${new Date().toLocaleString()}`, `Entries: ${activeEntries.length}`, ""];
+          activeEntries.forEach(e => {
+            lines.push("---");
+            lines.push(`${formatDate(e.ts)} · ${formatTime(e.ts)}`);
+            lines.push(`FOCUS: ${e.text}`);
+            getMorningLogs(e).forEach((w, i) => {
+              lines.push(`  Waking ${i + 1}: ${w.wakingThoughts || "(no thoughts logged)"}`);
+              if (w.categories.length) lines.push(`  Categories: ${w.categories.join(", ")}`);
+              if (w.ideas) lines.push(`  Ideas: ${w.ideas}`);
+            });
+            lines.push("");
+          });
+          downloadFile(lines.join("\n"), `diffuse-journal-${date}.txt`, "text/plain");
+        }
+      };
+
+      const clearAllData = () => {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(API_KEY_STORAGE);
+        localStorage.removeItem(PATTERNS_STORAGE);
+        setEntries([]); setApiKey(""); setRememberKey(false); setPatternHistory([]);
+        setInsight(""); setLastUsage(null); setShowClearConfirm(false);
       };
 
       // ── Derived ───────────────────────────────────────────────
@@ -485,6 +607,9 @@
                     {nightSaved ? "✓ Saved" : "Save"}
                   </button>
                   <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>⌘ + Enter</span>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                  Your entries are saved only in this browser. Nothing leaves your device unless you use Analyze Patterns.
                 </div>
 
                 {mostRecent && (
@@ -778,6 +903,14 @@
                       </div>
                     ))}
 
+                    {/* Export */}
+                    {activeEntries.length > 0 && (
+                      <div style={{ marginTop: 28, display: "flex", gap: 16 }}>
+                        <button className="ghost-btn" onClick={() => exportData("txt")}>↓ Export as text</button>
+                        <button className="ghost-btn" onClick={() => exportData("json")}>↓ Export as JSON</button>
+                      </div>
+                    )}
+
                     {/* Archived section */}
                     {archivedEntries.length > 0 && (
                       <div style={{ marginTop: 24 }}>
@@ -802,6 +935,12 @@
                     {/* Pattern analysis */}
                     {activeEntries.length >= 3 && (
                       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid #161616" }}>
+
+                        {/* Section header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
+                          <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
+                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
+                        </div>
 
                         {/* Time box selector */}
                         <div style={{ marginBottom: 18 }}>
@@ -833,17 +972,50 @@
                           <div style={{ marginBottom: 16 }}>
                             <div className="field-label">Anthropic API Key</div>
                             <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
-                            <div style={{ fontSize: 10, color: "#555", marginTop: 6 }}>Stored locally. Never sent anywhere except Anthropic.</div>
+                            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                              <div className="toggle-row" onClick={toggleRememberKey} style={{ cursor: "pointer" }}>
+                                <div className={`toggle-box ${rememberKey ? "checked" : ""}`} />
+                                <span style={{ fontSize: 10, color: rememberKey ? "#c8c4b8" : "#666", letterSpacing: "0.08em" }}>Remember key</span>
+                              </div>
+                              {rememberKey && apiKey && (
+                                <button className="ghost-btn danger" onClick={removeStoredKey}>Remove saved key</button>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 10, color: "#555", marginTop: 8, letterSpacing: "0.04em" }}>
+                              Session-only unless "Remember key" is checked. Stored keys are obfuscated to prevent accidental discovery — not encrypted.
+                            </div>
                           </div>
                         )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || !!pendingSend || timeBoxEntries.length < 3}>
                             {loadingInsight ? "Analyzing..." : "→ Find patterns"}
                           </button>
+                          <button
+                            className="insight-btn"
+                            title="Preview what will be sent before submitting"
+                            onClick={previewInsight}
+                            disabled={loadingInsight || !!pendingSend || timeBoxEntries.length < 3}
+                            style={{ padding: "8px 12px" }}
+                          >▾</button>
                           {!showApiKeyInput && (
-                            <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>API key</button>
+                            <button className="ghost-btn" style={{ marginLeft: 6 }} onClick={() => setShowApiKeyInput(true)}>API key</button>
                           )}
                         </div>
+                        {pendingSend && (
+                          <div className="privacy-panel">
+                            <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+                              What will be sent to Anthropic
+                            </div>
+                            <pre>{pendingSend.log}</pre>
+                            <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em", marginBottom: 12 }}>
+                              {pendingSend.count} {pendingSend.count === 1 ? "entry" : "entries"} · api.anthropic.com · ~{Math.ceil(pendingSend.log.length / 4).toLocaleString()} tokens (est.)
+                            </div>
+                            <div style={{ display: "flex", gap: 12 }}>
+                              <button className="save-btn" style={{ padding: "8px 20px", fontSize: 11 }} onClick={confirmAndSend}>Send</button>
+                              <button className="ghost-btn" onClick={() => setPendingSend(null)}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
                         {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                         {insight && (
                           <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
@@ -902,6 +1074,26 @@
                         {3 - activeEntries.length} more {3 - activeEntries.length === 1 ? "entry" : "entries"} until pattern analysis unlocks.
                       </div>
                     )}
+
+                    {/* Clear all data */}
+                    <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #111" }}>
+                      {!showClearConfirm ? (
+                        <button className="ghost-btn danger" onClick={() => { setShowClearConfirm(true); setTimeout(() => setShowClearConfirm(false), 3000); }}>
+                          Clear all data
+                        </button>
+                      ) : (
+                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                          <button className="ghost-btn danger" onClick={clearAllData}>Confirm — this cannot be undone</button>
+                          <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>Cancel</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Privacy footer */}
+                    <div style={{ marginTop: 24, fontSize: 10, color: "#3a3a3a", letterSpacing: "0.05em", lineHeight: 1.8 }}>
+                      Journal data is obfuscated in this browser to prevent accidental discovery. It is not encrypted.<br />
+                      Stored under <span style={{ color: "#444" }}>`nightly-focus-log`</span> · DevTools → Application → Local Storage to inspect or delete.
+                    </div>
                   </>
                 )}
               </div>
