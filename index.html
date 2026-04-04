@@ -4,11 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Diffuse Mode Solutioning</title>
-  <!--
-    To rename the GitHub repo from "household" to "diffuse-mode-solutioning":
-    GitHub → repo Settings → General → Repository name → rename
-    Then in Termux: git remote set-url origin https://github.com/pbannan/diffuse-mode-solutioning
-  -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -403,7 +398,7 @@
               max_tokens: 350,
               messages: [{
                 role: "user",
-                content: `Here are my recent nightly focus entries and, where captured, what I was thinking about the next morning:\n\n${log}\n\nIn 2-3 sentences: what patterns do you notice across both the evening intentions and the morning thoughts? What does this suggest about where my attention actually lives?`
+                content: `Here are my recent nightly focus entries and, where captured, what I was thinking about the next morning:\n\n${log}\n\nIn 2-3 sentences: what patterns do you notice across both the evening intentions and the morning thoughts? What does this suggest about where my attention actually lives? Name 1 thing I could do today to address that.`
               }]
             })
           });
