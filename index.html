@@ -76,6 +76,9 @@
     .key-input:focus { border-color: #333; }
 
     .morning-block { margin-top: 14px; padding: 12px 14px; background: #0f0f0f; border-left: 1px solid #1e1e1e; animation: fi 0.3s ease; }
+
+    .datetime-input { background: #111; border: 1px solid #1e1e1e; color: #777; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 10px; letter-spacing: 0.04em; color-scheme: dark; }
+    .datetime-input:focus { border-color: #333; outline: none; }
   </style>
 </head>
 <body>
@@ -88,6 +91,16 @@
     const API_KEY_STORAGE = "nightly-focus-api-key";
     const NIGHT_PROMPT = "What is the one problem you want to work on tomorrow?";
     const CATEGORIES = ["Last night's problem", "Work", "Personal", "Health", "Creative", "Relationships", "Other"];
+    const PATTERNS_STORAGE = "nightly-focus-patterns-v1";
+    const HAIKU_INPUT_COST_PER_M  = 0.80;  // $/1M tokens (claude-haiku-4-5)
+    const HAIKU_OUTPUT_COST_PER_M = 4.00;
+    const TIME_BOX_OPTIONS = [
+      { value: "week",    label: "last week"    },
+      { value: "month",   label: "last month"   },
+      { value: "quarter", label: "last quarter" },
+      { value: "year",    label: "last year"    },
+      { value: "all",     label: "all time"     },
+    ];
 
     function formatDate(iso) {
       return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -97,6 +110,27 @@
     }
     function formatShortDate(iso) {
       return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+
+    function getTimeBoxStart(box) {
+      const now = new Date();
+      if (box === "week")    return new Date(now - 7 * 24 * 60 * 60 * 1000);
+      if (box === "month")   { const d = new Date(now); d.setMonth(d.getMonth() - 1);       return d; }
+      if (box === "quarter") { const d = new Date(now); d.setMonth(d.getMonth() - 3);       return d; }
+      if (box === "year")    { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); return d; }
+      return null; // "all"
+    }
+    function calcCost(input, output) {
+      return (input / 1e6) * HAIKU_INPUT_COST_PER_M + (output / 1e6) * HAIKU_OUTPUT_COST_PER_M;
+    }
+    function formatCost(usd) {
+      if (usd < 0.0001) return "<$0.0001";
+      return `$${usd.toFixed(4)}`;
+    }
+    function toDatetimeLocal(iso) {
+      const d = new Date(iso);
+      const pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
     function loadEntries() {
@@ -134,14 +168,15 @@
       const [wakingCustomTag, setWakingCustomTag] = useState("");
       const [wakingSaved, setWakingSaved] = useState(false);
 
-      // Log — category editing
-      const [editingLogCat, setEditingLogCat] = useState(null); // { entryId, wakingId }
-      const [logCatDraft, setLogCatDraft] = useState([]);
-      const [logCatCustomTag, setLogCatCustomTag] = useState("");
+      // Log — waking edit (full: text, categories, ideas, datetime)
+      const [editingLogWaking, setEditingLogWaking] = useState(null); // { entryId, wakingId }
+      const [logWakingDraft, setLogWakingDraft] = useState(null);
+      const [logWakingCustomTag, setLogWakingCustomTag] = useState("");
 
-      // Log — edit
+      // Log — night entry edit
       const [editingId, setEditingId] = useState(null);
       const [editDraft, setEditDraft] = useState("");
+      const [editDatetime, setEditDatetime] = useState("");
 
       // Log — history
       const [expandedHistory, setExpandedHistory] = useState(null);
@@ -155,6 +190,12 @@
       const [insightError, setInsightError] = useState("");
       const [showApiKeyInput, setShowApiKeyInput] = useState(false);
       const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || "");
+      const [patternTimeBox, setPatternTimeBox] = useState("month");
+      const [patternHistory, setPatternHistory] = useState(() => {
+        try { const r = localStorage.getItem(PATTERNS_STORAGE); return r ? JSON.parse(r) : []; } catch { return []; }
+      });
+      const [showPatternHistory, setShowPatternHistory] = useState(false);
+      const [lastUsage, setLastUsage] = useState(null);
 
       const nightTextareaRef = useRef(null);
 
@@ -230,56 +271,64 @@
         setTimeout(() => setWakingSaved(false), 2000);
       };
 
-      // ── Log — category editing ────────────────────────────────
-      const startLogCatEdit = (entryId, w) => {
-        setEditingLogCat({ entryId, wakingId: w.id });
-        setLogCatDraft([...w.categories]);
-        setLogCatCustomTag("");
+      // ── Log — waking edit ────────────────────────────────────
+      const startLogWakingEdit = (entryId, w) => {
+        setEditingLogWaking({ entryId, wakingId: w.id });
+        setLogWakingDraft({ wakingThoughts: w.wakingThoughts || "", categories: [...w.categories], ideas: w.ideas || "", relatedToFocus: w.relatedToFocus || false, ts: toDatetimeLocal(w.ts) });
+        setLogWakingCustomTag("");
       };
 
-      const cancelLogCatEdit = () => { setEditingLogCat(null); setLogCatDraft([]); setLogCatCustomTag(""); };
+      const cancelLogWakingEdit = () => { setEditingLogWaking(null); setLogWakingDraft(null); setLogWakingCustomTag(""); };
 
-      const toggleLogCat = (cat) => {
-        setLogCatDraft(d => d.includes(cat) ? d.filter(c => c !== cat) : [...d, cat]);
+      const toggleLogWakingCat = (cat) => {
+        setLogWakingDraft(d => ({ ...d, categories: d.categories.includes(cat) ? d.categories.filter(c => c !== cat) : [...d.categories, cat] }));
       };
 
-      const addLogCatCustomTag = () => {
-        const tag = logCatCustomTag.trim();
-        if (!tag || logCatDraft.includes(tag)) { setLogCatCustomTag(""); return; }
-        setLogCatDraft(d => [...d, tag]);
-        setLogCatCustomTag("");
+      const addLogWakingCustomTag = () => {
+        const tag = logWakingCustomTag.trim();
+        if (!tag || logWakingDraft.categories.includes(tag)) { setLogWakingCustomTag(""); return; }
+        setLogWakingDraft(d => ({ ...d, categories: [...d.categories, tag] }));
+        setLogWakingCustomTag("");
       };
 
-      const saveLogCat = () => {
-        if (!editingLogCat) return;
-        const { entryId, wakingId } = editingLogCat;
+      const saveLogWaking = () => {
+        if (!editingLogWaking) return;
+        const { entryId, wakingId } = editingLogWaking;
         const next = entries.map(e => {
           if (e.id !== entryId) return e;
           const logs = getMorningLogs(e);
-          const updated = logs.map(w => w.id === wakingId ? { ...w, categories: logCatDraft } : w);
+          const updated = logs.map(w => {
+            if (w.id !== wakingId) return w;
+            const newTs = logWakingDraft.ts ? new Date(logWakingDraft.ts).toISOString() : w.ts;
+            return { ...w, wakingThoughts: logWakingDraft.wakingThoughts, categories: logWakingDraft.categories, ideas: logWakingDraft.ideas, relatedToFocus: logWakingDraft.relatedToFocus, ts: newTs };
+          });
           return { ...e, morningLogs: updated };
         });
         setEntries(next);
         persistEntries(next);
-        cancelLogCatEdit();
+        cancelLogWakingEdit();
       };
 
       // ── Log — edit ────────────────────────────────────────────
       const startEdit = (entry) => {
         setEditingId(entry.id);
         setEditDraft(entry.text);
+        setEditDatetime(toDatetimeLocal(entry.ts));
         setExpandedHistory(null);
       };
 
-      const cancelEdit = () => { setEditingId(null); setEditDraft(""); };
+      const cancelEdit = () => { setEditingId(null); setEditDraft(""); setEditDatetime(""); };
 
       const confirmEdit = (entry) => {
-        if (!editDraft.trim() || editDraft.trim() === entry.text) { cancelEdit(); return; }
+        const newText = editDraft.trim();
+        if (!newText) { cancelEdit(); return; }
+        const newTs = editDatetime ? new Date(editDatetime).toISOString() : entry.ts;
+        if (newText === entry.text && newTs === entry.ts) { cancelEdit(); return; }
         const now = new Date().toISOString();
         const historyEntry = { text: entry.text, ts: entry.editedTs || entry.ts };
         const next = entries.map(e =>
           e.id === entry.id
-            ? { ...e, text: editDraft.trim(), editedTs: now, history: [...(e.history || []), historyEntry] }
+            ? { ...e, text: newText, ts: newTs, editedTs: now, history: [...(e.history || []), historyEntry] }
             : e
         );
         setEntries(next);
@@ -326,12 +375,12 @@
       const saveApiKey = (k) => { setApiKey(k); localStorage.setItem(API_KEY_STORAGE, k); };
 
       const getInsight = async () => {
-        const visible = entries.filter(e => !e.deleted);
-        if (visible.length < 3) return;
+        if (timeBoxEntries.length < 3) return;
         if (!apiKey.trim()) { setShowApiKeyInput(true); setInsightError("Enter your Anthropic API key above to enable pattern analysis."); return; }
-        setLoadingInsight(true); setInsight(""); setInsightError("");
+        setLoadingInsight(true); setInsight(""); setInsightError(""); setLastUsage(null);
         try {
-          const log = visible.slice(0, 20).map((e, i) => {
+          const sliced = timeBoxEntries.slice(0, 20);
+          const log = sliced.map((e, i) => {
             let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
             getMorningLogs(e).forEach((w, wi) => {
               line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
@@ -360,7 +409,25 @@
           });
           if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error?.message || `HTTP ${res.status}`); }
           const data = await res.json();
-          setInsight(data.content[0].text);
+          const text = data.content[0].text;
+          const usage = {
+            inputTokens:  data.usage?.input_tokens  ?? 0,
+            outputTokens: data.usage?.output_tokens ?? 0,
+          };
+          usage.costUsd = calcCost(usage.inputTokens, usage.outputTokens);
+          setInsight(text);
+          setLastUsage(usage);
+          const record = {
+            id: String(Date.now()),
+            ts: new Date().toISOString(),
+            timeBox: patternTimeBox,
+            entriesCount: sliced.length,
+            insight: text,
+            usage,
+          };
+          const nextHistory = [record, ...patternHistory];
+          setPatternHistory(nextHistory);
+          localStorage.setItem(PATTERNS_STORAGE, JSON.stringify(nextHistory));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
       };
@@ -370,6 +437,12 @@
       const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
       const wakingDraftHasContent = wakingDraft && (wakingDraft.wakingThoughts.trim() || wakingDraft.ideas.trim() || wakingDraft.categories.length > 0);
       const mostRecentWakings = getMorningLogs(mostRecent || {});
+      const timeBoxStart = getTimeBoxStart(patternTimeBox);
+      const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
+      const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
+      const allCustomCategories = [...new Set(
+        activeEntries.flatMap(e => getMorningLogs(e).flatMap(w => w.categories.filter(c => !CATEGORIES.includes(c))))
+      )];
 
       // ── Render ────────────────────────────────────────────────
       return (
@@ -458,6 +531,9 @@
                                 ))}
                                 {wakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
                                   <div key={c} className="chip selected" onClick={() => toggleWakingCategory(c)}>{c} ×</div>
+                                ))}
+                                {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).map(c => (
+                                  <div key={c} className="chip" onClick={() => toggleWakingCategory(c)}>{c}</div>
                                 ))}
                               </div>
                               <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" />
@@ -581,9 +657,13 @@
                               value={editDraft}
                               onChange={e => setEditDraft(e.target.value)}
                               rows={4}
-                              style={{ marginBottom: 12 }}
+                              style={{ marginBottom: 10 }}
                               autoFocus
                             />
+                            <div style={{ marginBottom: 12 }}>
+                              <div className="field-label" style={{ marginBottom: 4 }}>Date</div>
+                              <input type="datetime-local" className="datetime-input" value={editDatetime} onChange={e => setEditDatetime(e.target.value)} />
+                            </div>
                             <div style={{ display: "flex", gap: 14 }}>
                               <button className="save-btn" style={{ padding: "8px 20px", fontSize: 11 }} onClick={() => confirmEdit(entry)} disabled={!editDraft.trim()}>Save</button>
                               <button className="ghost-btn" onClick={cancelEdit}>Cancel</button>
@@ -595,48 +675,70 @@
 
                         {/* Morning waking log blocks */}
                         {getMorningLogs(entry).length > 0 && editingId !== entry.id && getMorningLogs(entry).map((w, wi) => {
-                          const isEditingCat = editingLogCat?.entryId === entry.id && editingLogCat?.wakingId === w.id;
+                          const isEditingWaking = editingLogWaking?.entryId === entry.id && editingLogWaking?.wakingId === w.id;
                           const wLogs = getMorningLogs(entry);
                           return (
                             <div key={w.id} className="morning-block">
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                                <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em" }}>
-                                  {wLogs.length > 1 ? `Waking ${wi + 1} · ` : "Morning · "}{formatTime(w.ts)}
-                                </div>
-                                {!isEditingCat && !editingLogCat && (
-                                  <button className="ghost-btn" onClick={() => startLogCatEdit(entry.id, w)}>Edit categories</button>
-                                )}
-                              </div>
-                              {w.wakingThoughts && (
-                                <div style={{ fontSize: 12, color: "#666", lineHeight: 1.7, marginBottom: 6 }}>"{w.wakingThoughts}"</div>
-                              )}
-                              {isEditingCat ? (
-                                <div style={{ marginTop: 8 }}>
-                                  <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
-                                    {CATEGORIES.map(cat => (
-                                      <div key={cat} className={`chip ${logCatDraft.includes(cat) ? "selected" : ""}`} onClick={() => toggleLogCat(cat)}>{cat}</div>
-                                    ))}
-                                    {logCatDraft.filter(c => !CATEGORIES.includes(c)).map(c => (
-                                      <div key={c} className="chip selected" onClick={() => toggleLogCat(c)}>{c} ×</div>
-                                    ))}
+                              {isEditingWaking ? (
+                                <div style={{ animation: "fi 0.2s ease" }}>
+                                  <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.1em", marginBottom: 14 }}>
+                                    {wLogs.length > 1 ? `Waking ${wi + 1} · ` : ""}editing
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                                    <input className="tag-input" value={logCatCustomTag} onChange={e => setLogCatCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLogCatCustomTag(); }} placeholder="+ custom tag" />
+                                  <div style={{ marginBottom: 14 }}>
+                                    <div className="field-label">Waking thoughts</div>
+                                    <textarea className="text-area" value={logWakingDraft.wakingThoughts} onChange={e => setLogWakingDraft(d => ({ ...d, wakingThoughts: e.target.value }))} rows={3} autoFocus />
+                                  </div>
+                                  <div style={{ marginBottom: 14 }}>
+                                    <div className="field-label">Categories</div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
+                                      {CATEGORIES.map(cat => (
+                                        <div key={cat} className={`chip ${logWakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleLogWakingCat(cat)}>{cat}</div>
+                                      ))}
+                                      {logWakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
+                                        <div key={c} className="chip selected" onClick={() => toggleLogWakingCat(c)}>{c} ×</div>
+                                      ))}
+                                      {allCustomCategories.filter(c => !logWakingDraft.categories.includes(c)).map(c => (
+                                        <div key={c} className="chip" onClick={() => toggleLogWakingCat(c)}>{c}</div>
+                                      ))}
+                                    </div>
+                                    <input className="tag-input" value={logWakingCustomTag} onChange={e => setLogWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLogWakingCustomTag(); }} placeholder="+ custom tag" />
+                                  </div>
+                                  <div style={{ marginBottom: 14 }}>
+                                    <div className="field-label">Ideas</div>
+                                    <textarea className="text-area" value={logWakingDraft.ideas} onChange={e => setLogWakingDraft(d => ({ ...d, ideas: e.target.value }))} rows={3} />
+                                  </div>
+                                  <div style={{ marginBottom: 14 }}>
+                                    <div className="field-label">Date & time</div>
+                                    <input type="datetime-local" className="datetime-input" value={logWakingDraft.ts} onChange={e => setLogWakingDraft(d => ({ ...d, ts: e.target.value }))} />
                                   </div>
                                   <div style={{ display: "flex", gap: 12 }}>
-                                    <button className="save-btn" style={{ padding: "6px 16px", fontSize: 10 }} onClick={saveLogCat}>Save</button>
-                                    <button className="ghost-btn" onClick={cancelLogCatEdit}>Cancel</button>
+                                    <button className="save-btn" style={{ padding: "6px 16px", fontSize: 10 }} onClick={saveLogWaking}>Save</button>
+                                    <button className="ghost-btn" onClick={cancelLogWakingEdit}>Cancel</button>
                                   </div>
                                 </div>
                               ) : (
-                                w.categories.length > 0 && (
-                                  <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>
-                                    {w.categories.join(" · ")}
+                                <>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                                    <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em" }}>
+                                      {wLogs.length > 1 ? `Waking ${wi + 1} · ` : "Morning · "}{formatTime(w.ts)}
+                                    </div>
+                                    {!editingLogWaking && (
+                                      <button className="ghost-btn" onClick={() => startLogWakingEdit(entry.id, w)}>Edit</button>
+                                    )}
                                   </div>
-                                )
-                              )}
-                              {w.ideas && (
-                                <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 6, fontStyle: "italic" }}>{w.ideas}</div>
+                                  {w.wakingThoughts && (
+                                    <div style={{ fontSize: 12, color: "#666", lineHeight: 1.7, marginBottom: 6 }}>"{w.wakingThoughts}"</div>
+                                  )}
+                                  {w.categories.length > 0 && (
+                                    <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>
+                                      {w.categories.join(" · ")}
+                                    </div>
+                                  )}
+                                  {w.ideas && (
+                                    <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 6, fontStyle: "italic" }}>{w.ideas}</div>
+                                  )}
+                                  {w.relatedToFocus && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 6 }}>related to focus</div>}
+                                </>
                               )}
                             </div>
                           );
@@ -700,6 +802,33 @@
                     {/* Pattern analysis */}
                     {activeEntries.length >= 3 && (
                       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid #161616" }}>
+
+                        {/* Time box selector */}
+                        <div style={{ marginBottom: 18 }}>
+                          <div className="field-label" style={{ marginBottom: 8 }}>Analyze entries from</div>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            {TIME_BOX_OPTIONS.map(opt => (
+                              <button
+                                key={opt.value}
+                                className="ghost-btn"
+                                style={{
+                                  color: patternTimeBox === opt.value ? "#e8e4d9" : "#555",
+                                  borderBottom: patternTimeBox === opt.value ? "1px solid #666" : "1px solid transparent",
+                                  paddingBottom: 2,
+                                }}
+                                onClick={() => { setPatternTimeBox(opt.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                            {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
+                            {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
+                            {timeBoxEntries.length === 0 && " · no entries in this range"}
+                          </div>
+                        </div>
+
                         {showApiKeyInput && (
                           <div style={{ marginBottom: 16 }}>
                             <div className="field-label">Anthropic API Key</div>
@@ -708,7 +837,7 @@
                           </div>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight}>
+                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
                             {loadingInsight ? "Analyzing..." : "→ Find patterns"}
                           </button>
                           {!showApiKeyInput && (
@@ -717,8 +846,52 @@
                         </div>
                         {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                         {insight && (
-                          <div style={{ marginTop: 20, padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777", animation: "fi 0.4s ease" }}>
-                            {insight}
+                          <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
+                            <div style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}>
+                              {insight}
+                            </div>
+                            {lastUsage && (
+                              <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
+                                <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
+                                <span>est. {formatCost(lastUsage.costUsd)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Pattern history */}
+                        {patternHistory.length > 0 && (
+                          <div style={{ marginTop: 28 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                              <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
+                                {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
+                              </button>
+                              {totalCostUsd > 0 && (
+                                <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
+                                  total est. {formatCost(totalCostUsd)}
+                                </span>
+                              )}
+                            </div>
+                            {showPatternHistory && (
+                              <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
+                                {patternHistory.map(rec => (
+                                  <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
+                                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+                                      <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
+                                      <span style={{ fontSize: 10, color: "#444" }}>
+                                        {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
+                                      </span>
+                                      {rec.usage?.inputTokens != null && (
+                                        <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                                          {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}>{rec.insight}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
