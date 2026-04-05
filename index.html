@@ -710,7 +710,7 @@
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                           <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.1em" }}>
                             {formatDate(entry.ts)} · {formatTime(entry.ts)}
-                            {entry.editedTs && <span style={{ color: "#555" }}> · edited {formatTime(entry.editedTs)}</span>}
+                            {entry.editedTs && <div style={{ color: "#555", marginTop: 2 }}>edited {formatTime(entry.editedTs)}</div>}
                           </div>
                           <div style={{ display: "flex", gap: 14, flexShrink: 0, marginLeft: 12 }}>
                             {editingId !== entry.id && (
