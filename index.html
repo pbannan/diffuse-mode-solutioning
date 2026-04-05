@@ -47,7 +47,7 @@
     .insight-btn:disabled { opacity: 0.4; cursor: default; }
 
     .chip { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #333; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s; color: #777; background: transparent; user-select: none; margin: 3px 3px 3px 0; }
-    .chip:hover { border-color: #555; color: #aaa; }
+    @media (hover: hover) { .chip:hover { border-color: #555; color: #aaa; } }
     .chip.selected { border-color: #666; color: #c8c4b8; background: #161616; }
 
     .field-label { font-size: 10px; letter-spacing: 0.14em; color: #666; text-transform: uppercase; margin-bottom: 10px; }
