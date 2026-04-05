@@ -74,6 +74,9 @@
 
     .datetime-input { background: #111; border: 1px solid #1e1e1e; color: #777; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 10px; letter-spacing: 0.04em; color-scheme: dark; }
     .datetime-input:focus { border-color: #333; outline: none; }
+
+    .privacy-panel { margin-top:16px; padding:16px; background:#111; border:1px solid #1a1a1a; animation: fi 0.3s ease; }
+    .privacy-panel pre { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#666; line-height:1.65; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow-y:auto; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:12px; }
   </style>
 </head>
 <body>
@@ -84,7 +87,7 @@
 
     const STORAGE_KEY = "nightly-focus-log";
     const API_KEY_STORAGE = "nightly-focus-api-key";
-    const NIGHT_PROMPT = "What is the one problem you want to work on tomorrow?";
+    const NIGHT_PROMPT = "What are you working on?";
     const CATEGORIES = ["Last night's problem", "Work", "Personal", "Health", "Creative", "Relationships", "Other"];
     const PATTERNS_STORAGE = "nightly-focus-patterns-v1";
     const HAIKU_INPUT_COST_PER_M  = 0.80;  // $/1M tokens (claude-haiku-4-5)
@@ -131,11 +134,30 @@
     function loadEntries() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
+        if (!raw) return [];
+        try { return JSON.parse(b64dec(raw)); } catch { return JSON.parse(raw); } // migrate legacy plain JSON
       } catch { return []; }
     }
     function persistEntries(entries) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+      localStorage.setItem(STORAGE_KEY, b64enc(JSON.stringify(entries)));
+    }
+
+    // UTF-8-safe base64 helpers (btoa/atob are Latin-1 only)
+    function b64enc(str) {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+        (_, p) => String.fromCharCode(parseInt(p, 16))));
+    }
+    function b64dec(b64) {
+      return decodeURIComponent(atob(b64).split("").map(
+        c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join(""));
+    }
+
+    function downloadFile(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
     }
 
     function blankMorning() {
@@ -184,13 +206,23 @@
       const [loadingInsight, setLoadingInsight] = useState(false);
       const [insightError, setInsightError] = useState("");
       const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-      const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || "");
+      const [apiKey, setApiKey] = useState(() => {
+        const stored = localStorage.getItem(API_KEY_STORAGE);
+        if (!stored) return "";
+        try { return b64dec(stored); } catch { return stored; } // migrate legacy plain key
+      });
+      const [rememberKey, setRememberKey] = useState(() => !!localStorage.getItem(API_KEY_STORAGE));
       const [patternTimeBox, setPatternTimeBox] = useState("month");
       const [patternHistory, setPatternHistory] = useState(() => {
-        try { const r = localStorage.getItem(PATTERNS_STORAGE); return r ? JSON.parse(r) : []; } catch { return []; }
+        try {
+          const r = localStorage.getItem(PATTERNS_STORAGE);
+          if (!r) return [];
+          try { return JSON.parse(b64dec(r)); } catch { return JSON.parse(r); } // migrate legacy plain JSON
+        } catch { return []; }
       });
       const [showPatternHistory, setShowPatternHistory] = useState(false);
       const [lastUsage, setLastUsage] = useState(null);
+      const [showClearConfirm, setShowClearConfirm] = useState(false);
 
       const nightTextareaRef = useRef(null);
 
@@ -312,7 +344,7 @@
         setExpandedHistory(null);
       };
 
-      const cancelEdit = () => { setEditingId(null); setEditDraft(""); setEditDatetime(""); };
+      const cancelEdit = () => { setEditingId(null); setEditDraft(""); setEditDatetime(""); cancelLogWakingEdit(); };
 
       const confirmEdit = (entry) => {
         const newText = editDraft.trim();
@@ -367,7 +399,23 @@
       };
 
       // ── Patterns ──────────────────────────────────────────────
-      const saveApiKey = (k) => { setApiKey(k); localStorage.setItem(API_KEY_STORAGE, k); };
+      const saveApiKey = (k) => {
+        setApiKey(k);
+        if (k.trim().startsWith("sk-")) setInsightError("");
+        if (rememberKey) localStorage.setItem(API_KEY_STORAGE, b64enc(k));
+        else localStorage.removeItem(API_KEY_STORAGE);
+      };
+      const toggleRememberKey = () => {
+        const next = !rememberKey;
+        setRememberKey(next);
+        if (next && apiKey) localStorage.setItem(API_KEY_STORAGE, b64enc(apiKey));
+        else localStorage.removeItem(API_KEY_STORAGE);
+      };
+      const removeStoredKey = () => {
+        localStorage.removeItem(API_KEY_STORAGE);
+        setApiKey("");
+        setRememberKey(false);
+      };
 
       const getInsight = async () => {
         if (timeBoxEntries.length < 3) return;
@@ -422,9 +470,39 @@
           };
           const nextHistory = [record, ...patternHistory];
           setPatternHistory(nextHistory);
-          localStorage.setItem(PATTERNS_STORAGE, JSON.stringify(nextHistory));
+          localStorage.setItem(PATTERNS_STORAGE, b64enc(JSON.stringify(nextHistory)));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
+      };
+
+      const exportData = (format) => {
+        const date = new Date().toISOString().slice(0, 10);
+        if (format === "json") {
+          const payload = JSON.stringify({ exportedAt: new Date().toISOString(), app: "Diffuse Mode Solutioning", entries: activeEntries }, null, 2);
+          downloadFile(payload, `diffuse-journal-${date}.json`, "application/json");
+        } else {
+          const lines = ["=== DIFFUSE MODE JOURNAL EXPORT ===", `Exported: ${new Date().toLocaleString()}`, `Entries: ${activeEntries.length}`, ""];
+          activeEntries.forEach(e => {
+            lines.push("---");
+            lines.push(`${formatDate(e.ts)} · ${formatTime(e.ts)}`);
+            lines.push(`FOCUS: ${e.text}`);
+            getMorningLogs(e).forEach((w, i) => {
+              lines.push(`  Waking ${i + 1}: ${w.wakingThoughts || "(no thoughts logged)"}`);
+              if (w.categories.length) lines.push(`  Categories: ${w.categories.join(", ")}`);
+              if (w.ideas) lines.push(`  Ideas: ${w.ideas}`);
+            });
+            lines.push("");
+          });
+          downloadFile(lines.join("\n"), `diffuse-journal-${date}.txt`, "text/plain");
+        }
+      };
+
+      const clearAllData = () => {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(API_KEY_STORAGE);
+        localStorage.removeItem(PATTERNS_STORAGE);
+        setEntries([]); setApiKey(""); setRememberKey(false); setPatternHistory([]);
+        setInsight(""); setLastUsage(null); setShowClearConfirm(false);
       };
 
       // ── Derived ───────────────────────────────────────────────
@@ -669,7 +747,7 @@
                         )}
 
                         {/* Morning waking log blocks */}
-                        {getMorningLogs(entry).length > 0 && editingId !== entry.id && getMorningLogs(entry).map((w, wi) => {
+                        {getMorningLogs(entry).length > 0 && getMorningLogs(entry).map((w, wi) => {
                           const isEditingWaking = editingLogWaking?.entryId === entry.id && editingLogWaking?.wakingId === w.id;
                           const wLogs = getMorningLogs(entry);
                           return (
@@ -717,7 +795,7 @@
                                     <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.1em" }}>
                                       {wLogs.length > 1 ? `Waking ${wi + 1} · ` : "Morning · "}{formatTime(w.ts)}
                                     </div>
-                                    {!editingLogWaking && (
+                                    {!editingLogWaking && editingId === entry.id && (
                                       <button className="ghost-btn" onClick={() => startLogWakingEdit(entry.id, w)}>Edit</button>
                                     )}
                                   </div>
@@ -773,6 +851,14 @@
                       </div>
                     ))}
 
+                    {/* Export */}
+                    {activeEntries.length > 0 && (
+                      <div style={{ marginTop: 28, display: "flex", gap: 16 }}>
+                        <button className="ghost-btn" onClick={() => exportData("txt")}>↓ Export as text</button>
+                        <button className="ghost-btn" onClick={() => exportData("json")}>↓ Export as JSON</button>
+                      </div>
+                    )}
+
                     {/* Archived section */}
                     {archivedEntries.length > 0 && (
                       <div style={{ marginTop: 24 }}>
@@ -798,26 +884,27 @@
                     {activeEntries.length >= 3 && (
                       <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid #161616" }}>
 
+                        {/* Section header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
+                          <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
+                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
+                        </div>
+
                         {/* Time box selector */}
                         <div style={{ marginBottom: 18 }}>
-                          <div className="field-label" style={{ marginBottom: 8 }}>Analyze entries from</div>
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                            {TIME_BOX_OPTIONS.map(opt => (
-                              <button
-                                key={opt.value}
-                                className="ghost-btn"
-                                style={{
-                                  color: patternTimeBox === opt.value ? "#e8e4d9" : "#555",
-                                  borderBottom: patternTimeBox === opt.value ? "1px solid #666" : "1px solid transparent",
-                                  paddingBottom: 2,
-                                }}
-                                onClick={() => { setPatternTimeBox(opt.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                            <div className="field-label" style={{ marginBottom: 0 }}>Analyze entries from</div>
+                            <select
+                              value={patternTimeBox}
+                              onChange={e => { setPatternTimeBox(e.target.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
+                              style={{ background: "#111", border: "1px solid #1e1e1e", color: "#c8c4b8", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "4px 8px", letterSpacing: "0.04em", cursor: "pointer", colorScheme: "dark" }}
+                            >
+                              {TIME_BOX_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
                           </div>
-                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
                             {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
                             {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
                             {timeBoxEntries.length === 0 && " · no entries in this range"}
@@ -828,7 +915,15 @@
                           <div style={{ marginBottom: 16 }}>
                             <div className="field-label">Anthropic API Key</div>
                             <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
-                            <div style={{ fontSize: 10, color: "#555", marginTop: 6 }}>Stored locally. Never sent anywhere except Anthropic.</div>
+                            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                              <div className="toggle-row" onClick={toggleRememberKey} style={{ cursor: "pointer" }}>
+                                <div className={`toggle-box ${rememberKey ? "checked" : ""}`} />
+                                <span style={{ fontSize: 10, color: rememberKey ? "#c8c4b8" : "#666", letterSpacing: "0.08em" }}>Remember key</span>
+                              </div>
+                              {rememberKey && apiKey && (
+                                <button className="ghost-btn danger" onClick={removeStoredKey}>Remove saved key</button>
+                              )}
+                            </div>
                           </div>
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -897,10 +992,30 @@
                         {3 - activeEntries.length} more {3 - activeEntries.length === 1 ? "entry" : "entries"} until pattern analysis unlocks.
                       </div>
                     )}
+
+                    {/* Clear all data */}
+                    <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #111" }}>
+                      {!showClearConfirm ? (
+                        <button className="ghost-btn danger" onClick={() => { setShowClearConfirm(true); setTimeout(() => setShowClearConfirm(false), 3000); }}>
+                          Clear all data
+                        </button>
+                      ) : (
+                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                          <button className="ghost-btn danger" onClick={clearAllData}>Confirm — this cannot be undone</button>
+                          <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>Cancel</button>
+                        </div>
+                      )}
+                    </div>
+
                   </>
                 )}
               </div>
             )}
+
+            {/* Global footer */}
+            <div style={{ marginTop: 60, paddingTop: 16, borderTop: "1px solid #111", fontSize: 10, color: "#3a3a3a", letterSpacing: "0.05em", lineHeight: 1.8 }}>
+              Data is stored locally and obfuscated to prevent accidental discovery. It is never shared without your permission.
+            </div>
 
           </div>
         </div>
