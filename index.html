@@ -140,11 +140,21 @@
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
-        try { return JSON.parse(atob(raw)); } catch { return JSON.parse(raw); } // migrate legacy plain JSON
+        try { return JSON.parse(b64dec(raw)); } catch { return JSON.parse(raw); } // migrate legacy plain JSON
       } catch { return []; }
     }
     function persistEntries(entries) {
-      localStorage.setItem(STORAGE_KEY, btoa(JSON.stringify(entries)));
+      localStorage.setItem(STORAGE_KEY, b64enc(JSON.stringify(entries)));
+    }
+
+    // UTF-8-safe base64 helpers (btoa/atob are Latin-1 only)
+    function b64enc(str) {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+        (_, p) => String.fromCharCode(parseInt(p, 16))));
+    }
+    function b64dec(b64) {
+      return decodeURIComponent(atob(b64).split("").map(
+        c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join(""));
     }
 
     function downloadFile(content, filename, type) {
@@ -204,7 +214,7 @@
       const [apiKey, setApiKey] = useState(() => {
         const stored = localStorage.getItem(API_KEY_STORAGE);
         if (!stored) return "";
-        try { return atob(stored); } catch { return stored; } // migrate legacy plain key
+        try { return b64dec(stored); } catch { return stored; } // migrate legacy plain key
       });
       const [rememberKey, setRememberKey] = useState(() => !!localStorage.getItem(API_KEY_STORAGE));
       const [patternTimeBox, setPatternTimeBox] = useState("month");
@@ -212,7 +222,7 @@
         try {
           const r = localStorage.getItem(PATTERNS_STORAGE);
           if (!r) return [];
-          try { return JSON.parse(atob(r)); } catch { return JSON.parse(r); } // migrate legacy plain JSON
+          try { return JSON.parse(b64dec(r)); } catch { return JSON.parse(r); } // migrate legacy plain JSON
         } catch { return []; }
       });
       const [showPatternHistory, setShowPatternHistory] = useState(false);
@@ -397,13 +407,13 @@
       const saveApiKey = (k) => {
         setApiKey(k);
         if (k.trim().startsWith("sk-")) setInsightError("");
-        if (rememberKey) localStorage.setItem(API_KEY_STORAGE, btoa(k));
+        if (rememberKey) localStorage.setItem(API_KEY_STORAGE, b64enc(k));
         else localStorage.removeItem(API_KEY_STORAGE);
       };
       const toggleRememberKey = () => {
         const next = !rememberKey;
         setRememberKey(next);
-        if (next && apiKey) localStorage.setItem(API_KEY_STORAGE, btoa(apiKey));
+        if (next && apiKey) localStorage.setItem(API_KEY_STORAGE, b64enc(apiKey));
         else localStorage.removeItem(API_KEY_STORAGE);
       };
       const removeStoredKey = () => {
@@ -465,7 +475,7 @@
           };
           const nextHistory = [record, ...patternHistory];
           setPatternHistory(nextHistory);
-          localStorage.setItem(PATTERNS_STORAGE, btoa(JSON.stringify(nextHistory)));
+          localStorage.setItem(PATTERNS_STORAGE, b64enc(JSON.stringify(nextHistory)));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
       };
