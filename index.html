@@ -532,7 +532,7 @@
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: 28, marginBottom: 36, borderBottom: "1px solid #1a1a1a" }}>
-              {[["tonight", "Tonight"], ["morning", "Morning"], ["log", `Log${activeEntries.length > 0 ? ` (${activeEntries.length})` : ""}`]].map(([id, label]) => (
+              {[["tonight", "Tonight"], ["morning", "Morning"], ["log", `Log${activeEntries.length > 0 ? ` (${activeEntries.length})` : ""}`], ["patterns", "Patterns"]].map(([id, label]) => (
                 <div key={id} className={`tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{label}</div>
               ))}
             </div>
@@ -880,119 +880,6 @@
                       </div>
                     )}
 
-                    {/* Pattern analysis */}
-                    {activeEntries.length >= 3 && (
-                      <div style={{ marginTop: 40, paddingTop: 28, borderTop: "1px solid #161616" }}>
-
-                        {/* Section header */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
-                          <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
-                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
-                        </div>
-
-                        {/* Time box selector */}
-                        <div style={{ marginBottom: 18 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                            <div className="field-label" style={{ marginBottom: 0 }}>Analyze entries from</div>
-                            <select
-                              value={patternTimeBox}
-                              onChange={e => { setPatternTimeBox(e.target.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
-                              style={{ background: "#111", border: "1px solid #1e1e1e", color: "#c8c4b8", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "4px 8px", letterSpacing: "0.04em", cursor: "pointer", colorScheme: "dark" }}
-                            >
-                              {TIME_BOX_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
-                            {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
-                            {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
-                            {timeBoxEntries.length === 0 && " · no entries in this range"}
-                          </div>
-                        </div>
-
-                        {showApiKeyInput && (
-                          <div style={{ marginBottom: 16 }}>
-                            <div className="field-label">Anthropic API Key</div>
-                            <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
-                            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                              <div className="toggle-row" onClick={toggleRememberKey} style={{ cursor: "pointer" }}>
-                                <div className={`toggle-box ${rememberKey ? "checked" : ""}`} />
-                                <span style={{ fontSize: 10, color: rememberKey ? "#c8c4b8" : "#666", letterSpacing: "0.08em" }}>Remember key</span>
-                              </div>
-                              {rememberKey && apiKey && (
-                                <button className="ghost-btn danger" onClick={removeStoredKey}>Remove saved key</button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
-                            {loadingInsight ? "Analyzing..." : "→ Find patterns"}
-                          </button>
-                          {!showApiKeyInput && (
-                            <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>API key</button>
-                          )}
-                        </div>
-                        {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
-                        {insight && (
-                          <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
-                            <div style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}>
-                              {insight}
-                            </div>
-                            {lastUsage && (
-                              <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
-                                <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
-                                <span>est. {formatCost(lastUsage.costUsd)}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Pattern history */}
-                        {patternHistory.length > 0 && (
-                          <div style={{ marginTop: 28 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                              <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
-                                {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
-                              </button>
-                              {totalCostUsd > 0 && (
-                                <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
-                                  total est. {formatCost(totalCostUsd)}
-                                </span>
-                              )}
-                            </div>
-                            {showPatternHistory && (
-                              <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
-                                {patternHistory.map(rec => (
-                                  <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
-                                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                                      <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
-                                      <span style={{ fontSize: 10, color: "#444" }}>
-                                        {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
-                                      </span>
-                                      {rec.usage?.inputTokens != null && (
-                                        <span style={{ fontSize: 10, color: "#3a3a3a" }}>
-                                          {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}>{rec.insight}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {activeEntries.length < 3 && activeEntries.length > 0 && (
-                      <div style={{ marginTop: 28, fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
-                        {3 - activeEntries.length} more {3 - activeEntries.length === 1 ? "entry" : "entries"} until pattern analysis unlocks.
-                      </div>
-                    )}
-
                     {/* Clear all data */}
                     <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #111" }}>
                       {!showClearConfirm ? (
@@ -1007,6 +894,122 @@
                       )}
                     </div>
 
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── PATTERNS ── */}
+            {view === "patterns" && (
+              <div style={{ animation: "fi 0.3s ease" }}>
+                {activeEntries.length < 3 ? (
+                  <div style={{ color: "#666", fontSize: 13 }}>
+                    {activeEntries.length === 0
+                      ? "No entries yet. Add at least 3 nights to unlock pattern analysis."
+                      : `${3 - activeEntries.length} more ${3 - activeEntries.length === 1 ? "entry" : "entries"} until pattern analysis unlocks.`}
+                  </div>
+                ) : (
+                  <>
+                    {/* Section header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
+                      <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
+                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
+                    </div>
+
+                    {/* Time box selector */}
+                    <div style={{ marginBottom: 18 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <div className="field-label" style={{ marginBottom: 0 }}>Analyze entries from</div>
+                        <select
+                          value={patternTimeBox}
+                          onChange={e => { setPatternTimeBox(e.target.value); setInsight(""); setLastUsage(null); setInsightError(""); }}
+                          style={{ background: "#111", border: "1px solid #1e1e1e", color: "#c8c4b8", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, padding: "4px 8px", letterSpacing: "0.04em", cursor: "pointer", colorScheme: "dark" }}
+                        >
+                          {TIME_BOX_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                        {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
+                        {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
+                        {timeBoxEntries.length === 0 && " · no entries in this range"}
+                      </div>
+                    </div>
+
+                    {showApiKeyInput && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div className="field-label">Anthropic API Key</div>
+                        <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
+                        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                          <div className="toggle-row" onClick={toggleRememberKey} style={{ cursor: "pointer" }}>
+                            <div className={`toggle-box ${rememberKey ? "checked" : ""}`} />
+                            <span style={{ fontSize: 10, color: rememberKey ? "#c8c4b8" : "#666", letterSpacing: "0.08em" }}>Remember key</span>
+                          </div>
+                          {rememberKey && apiKey && (
+                            <button className="ghost-btn danger" onClick={removeStoredKey}>Remove saved key</button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
+                        {loadingInsight ? "Analyzing..." : "→ Find patterns"}
+                      </button>
+                      {!showApiKeyInput && (
+                        <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>API key</button>
+                      )}
+                    </div>
+                    {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
+                    {insight && (
+                      <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
+                        <div style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}>
+                          {insight}
+                        </div>
+                        {lastUsage && (
+                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
+                            <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
+                            <span>est. {formatCost(lastUsage.costUsd)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Pattern history */}
+                    {patternHistory.length > 0 && (
+                      <div style={{ marginTop: 28 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
+                            {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
+                          </button>
+                          {totalCostUsd > 0 && (
+                            <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
+                              total est. {formatCost(totalCostUsd)}
+                            </span>
+                          )}
+                        </div>
+                        {showPatternHistory && (
+                          <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
+                            {patternHistory.map(rec => (
+                              <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
+                                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+                                  <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
+                                  <span style={{ fontSize: 10, color: "#444" }}>
+                                    {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
+                                  </span>
+                                  {rec.usage?.inputTokens != null && (
+                                    <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                                      {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}>{rec.insight}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
