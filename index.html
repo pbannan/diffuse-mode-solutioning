@@ -183,12 +183,14 @@
       const [wakingDraft, setWakingDraft] = useState(null); // null = read mode
       const [editingWakingId, setEditingWakingId] = useState(null); // "new" or existing waking id
       const [wakingCustomTag, setWakingCustomTag] = useState("");
+      const [wakingShowOther, setWakingShowOther] = useState(false);
       const [wakingSaved, setWakingSaved] = useState(false);
 
       // Log — waking edit (full: text, categories, ideas, datetime)
       const [editingLogWaking, setEditingLogWaking] = useState(null); // { entryId, wakingId }
       const [logWakingDraft, setLogWakingDraft] = useState(null);
       const [logWakingCustomTag, setLogWakingCustomTag] = useState("");
+      const [logWakingShowOther, setLogWakingShowOther] = useState(false);
 
       // Log — night entry edit
       const [editingId, setEditingId] = useState(null);
@@ -259,9 +261,10 @@
       const startEditWaking = (w) => {
         setWakingDraft({ wakingThoughts: w.wakingThoughts, categories: [...w.categories], ideas: w.ideas, relatedToFocus: w.relatedToFocus });
         setEditingWakingId(w.id);
+        setWakingShowOther(w.categories.some(c => !CATEGORIES.includes(c)));
       };
 
-      const cancelWaking = () => { setWakingDraft(null); setEditingWakingId(null); setWakingCustomTag(""); };
+      const cancelWaking = () => { setWakingDraft(null); setEditingWakingId(null); setWakingCustomTag(""); setWakingShowOther(false); };
 
       const toggleWakingCategory = (cat) => {
         setWakingDraft(d => ({
@@ -277,10 +280,24 @@
         setWakingCustomTag("");
       };
 
+      const toggleWakingOther = () => {
+        if (wakingShowOther) {
+          setWakingDraft(d => ({ ...d, categories: d.categories.filter(c => CATEGORIES.includes(c)) }));
+          setWakingCustomTag("");
+          setWakingShowOther(false);
+        } else {
+          setWakingShowOther(true);
+        }
+      };
+
       const saveWaking = () => {
         if (!mostRecent) return;
+        const pendingTag = wakingCustomTag.trim();
+        const draftToSave = (pendingTag && !wakingDraft.categories.includes(pendingTag))
+          ? { ...wakingDraft, categories: [...wakingDraft.categories, pendingTag] }
+          : wakingDraft;
         const existing = getMorningLogs(mostRecent);
-        const log = { ...wakingDraft, ts: new Date().toISOString() };
+        const log = { ...draftToSave, ts: new Date().toISOString() };
         let updated;
         if (editingWakingId === "new") {
           log.id = String(Date.now());
@@ -303,9 +320,10 @@
         setEditingLogWaking({ entryId, wakingId: w.id });
         setLogWakingDraft({ wakingThoughts: w.wakingThoughts || "", categories: [...w.categories], ideas: w.ideas || "", relatedToFocus: w.relatedToFocus || false, ts: toDatetimeLocal(w.ts) });
         setLogWakingCustomTag("");
+        setLogWakingShowOther(w.categories.some(c => !CATEGORIES.includes(c)));
       };
 
-      const cancelLogWakingEdit = () => { setEditingLogWaking(null); setLogWakingDraft(null); setLogWakingCustomTag(""); };
+      const cancelLogWakingEdit = () => { setEditingLogWaking(null); setLogWakingDraft(null); setLogWakingCustomTag(""); setLogWakingShowOther(false); };
 
       const toggleLogWakingCat = (cat) => {
         setLogWakingDraft(d => ({ ...d, categories: d.categories.includes(cat) ? d.categories.filter(c => c !== cat) : [...d.categories, cat] }));
@@ -318,16 +336,30 @@
         setLogWakingCustomTag("");
       };
 
+      const toggleLogWakingOther = () => {
+        if (logWakingShowOther) {
+          setLogWakingDraft(d => ({ ...d, categories: d.categories.filter(c => CATEGORIES.includes(c)) }));
+          setLogWakingCustomTag("");
+          setLogWakingShowOther(false);
+        } else {
+          setLogWakingShowOther(true);
+        }
+      };
+
       const saveLogWaking = () => {
         if (!editingLogWaking) return;
+        const pendingTag = logWakingCustomTag.trim();
+        const draftToSave = (pendingTag && !logWakingDraft.categories.includes(pendingTag))
+          ? { ...logWakingDraft, categories: [...logWakingDraft.categories, pendingTag] }
+          : logWakingDraft;
         const { entryId, wakingId } = editingLogWaking;
         const next = entries.map(e => {
           if (e.id !== entryId) return e;
           const logs = getMorningLogs(e);
           const updated = logs.map(w => {
             if (w.id !== wakingId) return w;
-            const newTs = logWakingDraft.ts ? new Date(logWakingDraft.ts).toISOString() : w.ts;
-            return { ...w, wakingThoughts: logWakingDraft.wakingThoughts, categories: logWakingDraft.categories, ideas: logWakingDraft.ideas, relatedToFocus: logWakingDraft.relatedToFocus, ts: newTs };
+            const newTs = draftToSave.ts ? new Date(draftToSave.ts).toISOString() : w.ts;
+            return { ...w, wakingThoughts: draftToSave.wakingThoughts, categories: draftToSave.categories, ideas: draftToSave.ideas, relatedToFocus: draftToSave.relatedToFocus, ts: newTs };
           });
           return { ...e, morningLogs: updated };
         });
@@ -599,17 +631,29 @@
                             <div style={{ marginBottom: 20 }}>
                               <div className="field-label">Categories</div>
                               <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}>
-                                {CATEGORIES.map(cat => (
-                                  <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>
-                                ))}
+                                {CATEGORIES.map(cat => {
+                                  if (cat === "Other") {
+                                    const isActive = wakingShowOther || wakingDraft.categories.some(c => !CATEGORIES.includes(c));
+                                    return <div key={cat} className={`chip ${isActive ? "selected" : ""}`} onClick={toggleWakingOther}>{cat}</div>;
+                                  }
+                                  return <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>;
+                                })}
                                 {wakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
                                   <div key={c} className="chip selected" onClick={() => toggleWakingCategory(c)}>{c} ×</div>
                                 ))}
-                                {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).map(c => (
-                                  <div key={c} className="chip" onClick={() => toggleWakingCategory(c)}>{c}</div>
-                                ))}
                               </div>
-                              <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" />
+                              {wakingShowOther && (
+                                <div>
+                                  {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).length > 0 && (
+                                    <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
+                                      {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).map(c => (
+                                        <div key={c} className="chip" onClick={() => toggleWakingCategory(c)}>{c}</div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" autoFocus />
+                                </div>
+                              )}
                             </div>
                             <div style={{ marginBottom: 20 }}>
                               <div className="field-label">Thoughts or ideas to capture</div>
@@ -636,7 +680,7 @@
                               {!editingWakingId && <button className="ghost-btn" onClick={() => startEditWaking(w)}>Edit</button>}
                             </div>
                             {w.wakingThoughts && <div style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 6 }}>{w.wakingThoughts}</div>}
-                            {w.categories.length > 0 && <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>{w.categories.join(" · ")}</div>}
+                            {w.categories.length > 0 && <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>{w.categories.map(c => CATEGORIES.includes(c) ? c : `Other: ${c}`).join(" · ")}</div>}
                             {w.ideas && <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 4, fontStyle: "italic" }}>{w.ideas}</div>}
                             {w.relatedToFocus && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 6 }}>related to focus</div>}
                           </div>
@@ -657,14 +701,29 @@
                         <div style={{ marginBottom: 20 }}>
                           <div className="field-label">Categories</div>
                           <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}>
-                            {CATEGORIES.map(cat => (
-                              <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>
-                            ))}
+                            {CATEGORIES.map(cat => {
+                              if (cat === "Other") {
+                                const isActive = wakingShowOther || wakingDraft.categories.some(c => !CATEGORIES.includes(c));
+                                return <div key={cat} className={`chip ${isActive ? "selected" : ""}`} onClick={toggleWakingOther}>{cat}</div>;
+                              }
+                              return <div key={cat} className={`chip ${wakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleWakingCategory(cat)}>{cat}</div>;
+                            })}
                             {wakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
                               <div key={c} className="chip selected" onClick={() => toggleWakingCategory(c)}>{c} ×</div>
                             ))}
                           </div>
-                          <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" />
+                          {wakingShowOther && (
+                            <div>
+                              {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).length > 0 && (
+                                <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
+                                  {allCustomCategories.filter(c => !wakingDraft.categories.includes(c)).map(c => (
+                                    <div key={c} className="chip" onClick={() => toggleWakingCategory(c)}>{c}</div>
+                                  ))}
+                                </div>
+                              )}
+                              <input className="tag-input" value={wakingCustomTag} onChange={e => setWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addWakingCustomTag(); }} placeholder="+ custom tag" autoFocus />
+                            </div>
+                          )}
                         </div>
                         <div style={{ marginBottom: 20 }}>
                           <div className="field-label">Thoughts or ideas to capture</div>
@@ -764,17 +823,29 @@
                                   <div style={{ marginBottom: 14 }}>
                                     <div className="field-label">Categories</div>
                                     <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
-                                      {CATEGORIES.map(cat => (
-                                        <div key={cat} className={`chip ${logWakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleLogWakingCat(cat)}>{cat}</div>
-                                      ))}
+                                      {CATEGORIES.map(cat => {
+                                        if (cat === "Other") {
+                                          const isActive = logWakingShowOther || logWakingDraft.categories.some(c => !CATEGORIES.includes(c));
+                                          return <div key={cat} className={`chip ${isActive ? "selected" : ""}`} onClick={toggleLogWakingOther}>{cat}</div>;
+                                        }
+                                        return <div key={cat} className={`chip ${logWakingDraft.categories.includes(cat) ? "selected" : ""}`} onClick={() => toggleLogWakingCat(cat)}>{cat}</div>;
+                                      })}
                                       {logWakingDraft.categories.filter(c => !CATEGORIES.includes(c)).map(c => (
                                         <div key={c} className="chip selected" onClick={() => toggleLogWakingCat(c)}>{c} ×</div>
                                       ))}
-                                      {allCustomCategories.filter(c => !logWakingDraft.categories.includes(c)).map(c => (
-                                        <div key={c} className="chip" onClick={() => toggleLogWakingCat(c)}>{c}</div>
-                                      ))}
                                     </div>
-                                    <input className="tag-input" value={logWakingCustomTag} onChange={e => setLogWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLogWakingCustomTag(); }} placeholder="+ custom tag" />
+                                    {logWakingShowOther && (
+                                      <div>
+                                        {allCustomCategories.filter(c => !logWakingDraft.categories.includes(c)).length > 0 && (
+                                          <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 6 }}>
+                                            {allCustomCategories.filter(c => !logWakingDraft.categories.includes(c)).map(c => (
+                                              <div key={c} className="chip" onClick={() => toggleLogWakingCat(c)}>{c}</div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        <input className="tag-input" value={logWakingCustomTag} onChange={e => setLogWakingCustomTag(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLogWakingCustomTag(); }} placeholder="+ custom tag" autoFocus />
+                                      </div>
+                                    )}
                                   </div>
                                   <div style={{ marginBottom: 14 }}>
                                     <div className="field-label">Ideas</div>
@@ -804,7 +875,7 @@
                                   )}
                                   {w.categories.length > 0 && (
                                     <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>
-                                      {w.categories.join(" · ")}
+                                      {w.categories.map(c => CATEGORIES.includes(c) ? c : `Other: ${c}`).join(" · ")}
                                     </div>
                                   )}
                                   {w.ideas && (
