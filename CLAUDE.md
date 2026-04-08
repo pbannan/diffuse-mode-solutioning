@@ -23,13 +23,16 @@ your final response before signing off.
 
 ## GitHub MCP tools — availability and retries
 
-The GitHub MCP server runs with `MCP_CONNECTION_NONBLOCKING=true`, which means the session starts before the server finishes connecting. Tools may not be available immediately. The `gh` CLI and `hub` CLI are **not** available in this environment, so there is no shell fallback.
+The GitHub MCP server runs with `MCP_CONNECTION_NONBLOCKING=true`, which means the session starts before the server finishes connecting. Tools may not be available immediately. The `gh` CLI and `hub` CLI are **not** available in this environment.
 
 **At the start of any task that needs GitHub tools**, always call ToolSearch with `"query": "mcp__github"` proactively — before you need a specific tool. This gives the MCP server time to finish connecting and surfaces the tool schemas early.
 
 **If a tool call fails or ToolSearch returns no results:**
 1. Wait a moment, then retry ToolSearch once more.
-2. If tools are still unavailable after two ToolSearch attempts, tell the user: *"The GitHub MCP server is not responding. Please start a new session and try again."* Do not keep retrying in a loop.
+2. If tools are still unavailable after two ToolSearch attempts:
+   - **For reading** an issue or PR: use `WebFetch` on the GitHub HTML URL (e.g. `https://github.com/pbannan/diffuse-mode-solutioning/issues/33`). This works for public repos and is not rate-limited like the REST API.
+   - **For writing** (commenting, closing, creating PRs): there is no authenticated shell fallback. Tell the user: *"The GitHub MCP server is not responding. Please start a new session and try again."*
+   - Do not use `curl` against `api.github.com` — unauthenticated API calls are limited to 60 requests/hour and the quota is often already exhausted.
 
 ---
 
