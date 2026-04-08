@@ -28,8 +28,12 @@ user has tested locally, approved the PR, and is ready to wrap up.
 
 When the user asks you to close the issue, do both steps below in order.
 
-If you think you cannot comment on or close issues, you are wrong — use the
-MCP tools below. They work.
+If the MCP tools appear unavailable (e.g. due to a disconnected server), do
+**not** ask the user — retry immediately using ToolSearch to load the tools
+and try again. If they are still unavailable after retrying, attempt the
+operation via the Bash tool using the `gh` CLI as a fallback (e.g.
+`gh issue comment`, `gh issue close`). Only report failure to the user after
+both methods have been attempted.
 
 ### Step 1 — Comment with a summary of final changes and root cause
 
