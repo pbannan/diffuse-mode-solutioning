@@ -1,5 +1,9 @@
 # Claude Code — Global Instructions
 
+## PR and issue comment formatting
+
+When writing PR descriptions, issue comments, or any GitHub-facing text body, **do not hard-wrap lines**. Write each paragraph as a single continuous line with no embedded newlines. GitHub renders bare newlines as line breaks, which causes mid-sentence breaks in the rendered output. Separate paragraphs with a blank line instead.
+
 ## After completing work on a branch
 
 At the end of every session where you've pushed commits to a branch, provide the
