@@ -598,7 +598,6 @@
                   <button className="save-btn" onClick={saveNight} disabled={!nightInput.trim()}>
                     {nightSaved ? "✓ Saved" : "Save"}
                   </button>
-                  <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>⌘ + Enter</span>
                 </div>
 
                 {mostRecent && (
@@ -960,20 +959,6 @@
                       </div>
                     )}
 
-                    {/* Clear all data */}
-                    <div style={{ marginTop: 40, paddingTop: 20, borderTop: "1px solid #111" }}>
-                      {!showClearConfirm ? (
-                        <button className="ghost-btn danger" onClick={() => { setShowClearConfirm(true); setTimeout(() => setShowClearConfirm(false), 3000); }}>
-                          Clear all data
-                        </button>
-                      ) : (
-                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                          <button className="ghost-btn danger" onClick={clearAllData}>Confirm — this cannot be undone</button>
-                          <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>Cancel</button>
-                        </div>
-                      )}
-                    </div>
-
                   </>
                 )}
               </div>
@@ -1098,8 +1083,25 @@
             )}
 
             {/* Global footer */}
-            <div style={{ marginTop: 60, paddingTop: 16, borderTop: "1px solid #111", fontSize: 10, color: "#3a3a3a", letterSpacing: "0.05em", lineHeight: 1.8 }}>
-              Data is stored locally and never shared without your permission.
+            <div style={{ marginTop: 60, paddingTop: 16, borderTop: "1px solid #111", fontSize: 10, color: "#666", letterSpacing: "0.05em", lineHeight: 1.8 }}>
+              <div>Data is stored locally and never shared without your permission.</div>
+              <div style={{ marginTop: 12 }}>
+                {!showClearConfirm ? (
+                  <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(true)}>
+                    Clear all data
+                  </button>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+                      This action cannot be undone. It will clear all data including nightly focus, waking thoughts, and API key &amp; pattern analysis results. Are you sure?
+                    </div>
+                    <div style={{ display: "flex", gap: 20 }}>
+                      <button className="ghost-btn danger" onClick={clearAllData}>Yes</button>
+                      <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>No</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
