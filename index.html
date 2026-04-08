@@ -7,6 +7,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/marked@9/marked.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
@@ -77,6 +78,14 @@
 
     .privacy-panel { margin-top:16px; padding:16px; background:#111; border:1px solid #1a1a1a; animation: fi 0.3s ease; }
     .privacy-panel pre { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#666; line-height:1.65; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow-y:auto; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:12px; }
+
+    .insight-md p { margin-bottom: 0.75em; }
+    .insight-md p:last-child { margin-bottom: 0; }
+    .insight-md strong { color: #9a9690; font-weight: 500; }
+    .insight-md em { font-style: italic; }
+    .insight-md ul, .insight-md ol { padding-left: 1.4em; margin-bottom: 0.75em; }
+    .insight-md li { margin-bottom: 0.25em; }
+    .insight-md h1, .insight-md h2, .insight-md h3 { font-size: inherit; font-weight: 500; color: #9a9690; margin-bottom: 0.5em; letter-spacing: 0.06em; }
   </style>
 </head>
 <body>
@@ -1034,9 +1043,9 @@
                     {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                     {insight && (
                       <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
-                        <div style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}>
-                          {insight}
-                        </div>
+                        <div className="insight-md" style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}
+                          dangerouslySetInnerHTML={{ __html: window.marked.parse(insight) }}
+                        />
                         {lastUsage && (
                           <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
                             <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
@@ -1074,7 +1083,9 @@
                                     </span>
                                   )}
                                 </div>
-                                <div style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}>{rec.insight}</div>
+                                <div className="insight-md" style={{ fontSize: 12, color: "#555", lineHeight: 1.75 }}
+                                  dangerouslySetInnerHTML={{ __html: window.marked.parse(rec.insight) }}
+                                />
                               </div>
                             ))}
                           </div>
