@@ -976,9 +976,8 @@
                 ) : (
                   <>
                     {/* Section header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
+                    <div style={{ marginBottom: 18 }}>
                       <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
-                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
                     </div>
 
                     {/* Time box selector */}
@@ -995,7 +994,7 @@
                           ))}
                         </select>
                       </div>
-                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                      <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
                         {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
                         {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
                         {timeBoxEntries.length === 0 && " · no entries in this range"}
@@ -1048,7 +1047,7 @@
                             {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
                           </button>
                           {totalCostUsd > 0 && (
-                            <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
+                            <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
                               total est. {formatCost(totalCostUsd)}
                             </span>
                           )}
@@ -1056,14 +1055,14 @@
                         {showPatternHistory && (
                           <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
                             {patternHistory.map(rec => (
-                              <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
+                              <div key={rec.id} style={{ padding: "16px 0", borderBottom: "1px solid #1e1e1e" }}>
                                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                                  <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
-                                  <span style={{ fontSize: 10, color: "#444" }}>
+                                  <span style={{ fontSize: 10, color: "#666", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
+                                  <span style={{ fontSize: 10, color: "#555" }}>
                                     {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
                                   </span>
                                   {rec.usage?.inputTokens != null && (
-                                    <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                                    <span style={{ fontSize: 10, color: "#555" }}>
                                       {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
                                     </span>
                                   )}
