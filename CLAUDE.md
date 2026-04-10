@@ -1,58 +1,51 @@
-# Claude Code — Global Instructions
+# [PROJECT_NAME]
 
-## PR and issue comment formatting
+[One to two sentences describing what this project does and who it serves.]
 
-When writing PR descriptions, issue comments, or any GitHub-facing text body, **do not hard-wrap lines**. Write each paragraph as a single continuous line with no embedded newlines. GitHub renders bare newlines as line breaks, which causes mid-sentence breaks in the rendered output. Separate paragraphs with a blank line instead.
+## Stack
 
-## After completing work on a branch
+- **Framework**: [e.g., Next.js 14 — App Router]
+- **Language**: [e.g., TypeScript 5 strict]
+- **Database**: [e.g., PostgreSQL via Prisma]
+- **Auth**: [e.g., NextAuth.js v5]
+- **Styling**: [e.g., Tailwind CSS v3]
+- **Deploy**: [e.g., Vercel + GitHub Actions]
 
-At the end of every session where you've pushed commits to a branch, provide the
-following copy-paste commands so the user can test locally. Replace
-`<branch-name>` with the actual branch name.
+## Commands
 
 ```bash
-git fetch origin
-git checkout <branch-name>
-git pull origin <branch-name>
+[INSTALL]         # e.g., pnpm install
+[DEV]             # e.g., pnpm dev  →  localhost:3000
+[TEST_SINGLE]     # e.g., pnpm test -- -t "test name"
+[TEST_ALL]        # e.g., pnpm test
+[TYPECHECK]       # e.g., pnpm typecheck
+[LINT]            # e.g., pnpm lint:fix
+[BUILD]           # e.g., pnpm build
+[MIGRATE]         # e.g., pnpm prisma migrate dev
 ```
 
-Always include this block verbatim (with the real branch name substituted) in
-your final response before signing off.
+## Source Layout
 
----
+```
+src/
+  app/          # routes & pages
+  components/   # shared UI components
+  lib/          # third-party configs (singletons)
+  utils/        # pure helpers (no side effects)
+  hooks/        # custom React hooks
+  types/        # TypeScript type definitions
+```
 
-## Closing GitHub issues with the MCP tools
+## Non-Negotiable Rules
 
-Do **not** comment on or close an issue after pushing. There may be many
-pushes with their own commit messages — duplicate issue comments are not
-needed.
+- Never commit `.env`, secrets, or credentials
+- Run `[TYPECHECK]` and `[TEST_ALL]` before marking any task complete
+- Prefer editing existing files over creating new ones
+- No speculative abstractions — implement what is asked, nothing more
 
-Wait until the user explicitly asks you to close the issue. That means the
-user has tested locally, approved the PR, and is ready to wrap up.
+## Detailed Instructions
 
-When the user asks you to close the issue, do both steps below in order.
-
-If the MCP tools appear unavailable (e.g. due to a disconnected server), do
-**not** ask the user — retry immediately using ToolSearch to load the tools
-and try again. If they are still unavailable after retrying, attempt the
-operation via the Bash tool using the `gh` CLI as a fallback (e.g.
-`gh issue comment`, `gh issue close`). Only report failure to the user after
-both methods have been attempted.
-
-### Step 1 — Comment with a summary of final changes and root cause
-
-Use `mcp__github__add_issue_comment`:
-- `owner`: `pbannan`
-- `repo`: `diffuse-mode-solutioning`
-- `issue_number`: the issue number
-- `body`: a summary of the root cause and the final changes made to fix it
-
-### Step 2 — Close the issue
-
-Use `mcp__github__issue_write`:
-- `owner`: `pbannan`
-- `repo`: `diffuse-mode-solutioning`
-- `issue_number`: the issue number
-- `method`: `update`
-- `state`: `closed`
-- `state_reason`: `completed`
+@.claude/instructions/architecture.md
+@.claude/instructions/conventions.md
+@.claude/instructions/git-workflow.md
+@.claude/instructions/testing.md
