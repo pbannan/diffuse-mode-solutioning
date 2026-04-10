@@ -49,3 +49,7 @@ src/
 @.claude/instructions/conventions.md
 @.claude/instructions/git-workflow.md
 @.claude/instructions/testing.md
+
+## Design System
+
+For any UI or component work, reference @DESIGN.md for colors, typography, spacing, and component conventions.

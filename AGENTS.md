@@ -93,6 +93,19 @@ Skip: third-party internals, trivial getters, presentation-only snapshots.
 
 Must pass before marking complete: `[TYPECHECK]` + `[TEST_ALL]` + `[LINT]` — zero errors.
 
+## Design System
+
+A `DESIGN.md` file at the project root defines the full visual design system for this project. For any UI or component work:
+
+- **Colors**: Use palette names and hex values from DESIGN.md Section 2 — never hardcode arbitrary hex values
+- **Typography**: Follow the type scale in Section 3 — sizes, weights, and line heights
+- **Components**: Match the shapes, surfaces, and states described in Section 4
+- **Spacing**: Use the base-unit grid from Section 5 — all spacing is a multiple of [4px or 8px]
+- **Responsive**: Follow breakpoints and component adaptations in Section 8
+- **Prompt help**: Section 9 provides copy-paste prompt fragments for common UI patterns
+
+If `DESIGN.md` is not yet filled in for this project, ask before inventing visual decisions.
+
 ## Hard Rules
 
 - Never commit `.env`, secrets, or credentials
