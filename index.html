@@ -553,8 +553,22 @@
       const mostRecentWakings = getMorningLogs(mostRecent || {});
       const timeBoxStart = getTimeBoxStart(patternTimeBox);
       const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
-      const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
-      const totalHistoryTokens = patternHistory.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0) + (r.usage?.outputTokens ?? 0), 0);
+      const nextRunEstimate = (() => {
+        if (timeBoxEntries.length < 3) return null;
+        const sliced = timeBoxEntries.slice(0, 20);
+        const logText = sliced.map((e, i) => {
+          let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
+          getMorningLogs(e).forEach((w, wi) => {
+            line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
+            if (w.categories.length) line += ` | Categories: ${w.categories.join(", ")}`;
+            if (w.ideas) line += `\n   Ideas: "${w.ideas}"`;
+          });
+          return line;
+        }).join("\n\n");
+        const inputEst  = Math.round(logText.length / 4) + 300; // ~4 chars/token + prompt overhead
+        const outputEst = 350; // max_tokens cap
+        return { tokens: inputEst + outputEst, cost: calcCost(inputEst, outputEst) };
+      })();
       const allCustomCategories = [...new Set(
         activeEntries.flatMap(e => getMorningLogs(e).flatMap(w => w.categories.filter(c => !CATEGORIES.includes(c))))
       )];
@@ -1002,7 +1016,7 @@
                         {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
                         {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
                         {timeBoxEntries.length === 0 && " · no entries in this range"}
-                        {totalHistoryTokens > 0 && ` · ${totalHistoryTokens.toLocaleString()} tokens · ${formatCost(totalCostUsd)}`}
+                        {nextRunEstimate && ` · ~${nextRunEstimate.tokens.toLocaleString()} tokens · ~${formatCost(nextRunEstimate.cost)}`}
                       </div>
                     </div>
 
