@@ -553,6 +553,7 @@
       const mostRecentWakings = getMorningLogs(mostRecent || {});
       const timeBoxStart = getTimeBoxStart(patternTimeBox);
       const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
+      const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
       const nextRunEstimate = (() => {
         if (timeBoxEntries.length < 3) return null;
         const sliced = timeBoxEntries.slice(0, 20);
@@ -1061,10 +1062,15 @@
                     {/* Pattern history */}
                     {patternHistory.length > 0 && (
                       <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1e1e1e" }}>
-                        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                           <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
                             {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
                           </button>
+                          {totalCostUsd > 0 && (
+                            <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
+                              total est. {formatCost(totalCostUsd)}
+                            </span>
+                          )}
                         </div>
                         {showPatternHistory && (
                           <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
