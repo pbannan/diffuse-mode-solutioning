@@ -1,24 +1,19 @@
-# DESIGN.md — [Project Name]
+# DESIGN.md — Diffuse Mode Solutioning
 
-> Machine-readable design system for AI coding agents. Defines tokens, components, and visual rules so agents generate consistent UI without per-prompt style instructions.
+> Machine-readable design system for AI coding agents. All values are extracted directly from `index.html`'s `<style>` block.
 >
-> **Format**: Google Stitch DESIGN.md (9-section standard).
-> **Rule**: Use descriptive language with precise values in parentheses. Avoid raw CSS class names (`rounded-xl`, `text-sm`) — use natural language ("gently curved 6px corners", "14px body text"). Avoid generic color names ("blue") — use descriptive names with hex values ("Midnight Indigo (#4F46E5)").
+> **Rule**: Use descriptive color names with hex values in parentheses. Avoid raw CSS class names — describe appearance in natural language so any agent can interpret it correctly.
 
 ---
 
 ## 1. Visual Theme & Atmosphere
 
-[2–3 sentences describing the overall mood, emotional tone, and design philosophy. Examples:]
+Dark, minimal, terminal-adjacent interface designed for quiet daily rituals — bedtime reflection and morning capture. The palette is near-monochromatic dark with warm cream text and a single Electric Mint accent reserved exclusively for AI-powered actions. There is no decoration: no shadows, no gradients, no border radii. Every element is flush, flat, and purposeful.
 
-- **Professional / dense**: "Clean, high-density interface built for power users who value information over decoration. Surfaces are minimal; whitespace is functional, not decorative. Every pixel earns its place."
-- **Friendly / spacious**: "Warm, airy interface with generous breathing room. Approachable and trustworthy — designed to feel helpful, not demanding."
-- **Dark / technical**: "Dark-first developer aesthetic with precise mechanical alignment. Prioritizes readability in low-light environments and signals technical sophistication."
-
-**Density**: [Compact / Balanced / Spacious]
-**Corner philosophy**: [Sharp (0px) / Subtle (2–4px) / Rounded (6–8px) / Very rounded (12–16px) / Pill]
-**Visual weight**: [Lightweight / Medium / Bold]
-**Motion**: [Minimal / Purposeful transitions only / Rich micro-interactions]
+**Density**: Compact — tight spacing, small type, maximum content per screen
+**Corner philosophy**: Sharp — 0px border-radius everywhere (2px only on the scrollbar thumb)
+**Visual weight**: Lightweight — thin borders, muted grays, restrained hierarchy
+**Motion**: Minimal — single fade-in animation (`opacity 0 → 1, translateY 4px → 0, 0.3s ease`) for new entries; 0.15–0.2s transitions on interactive states only
 
 ---
 
@@ -28,179 +23,201 @@
 
 | Role | Descriptive Name | Hex | Functional Purpose |
 |------|-----------------|-----|-------------------|
-| Primary | [e.g., Midnight Indigo] | `[#4F46E5]` | CTAs, links, active indicators |
-| Primary hover | [e.g., Deep Indigo] | `[#4338CA]` | Interactive state on primary elements |
-| Primary subtle | [e.g., Lavender Mist] | `[#EEF2FF]` | Selected rows, highlight backgrounds |
-| Secondary | [e.g., Cool Slate] | `[#64748B]` | Secondary actions, supporting accents |
-| Background | [e.g., Cloud White] | `[#FFFFFF]` | Page and layout background |
-| Surface | [e.g., Soft Pearl] | `[#F8FAFC]` | Cards, panels, elevated containers |
-| Surface raised | [e.g., Pale Silver] | `[#F1F5F9]` | Nested surfaces, hover states |
-| Border | [e.g., Cool Gray] | `[#E2E8F0]` | Dividers, input strokes, outlines |
-| Border strong | [e.g., Steel Gray] | `[#CBD5E1]` | Focused inputs, prominent dividers |
-| Text primary | [e.g., Charcoal] | `[#0F172A]` | Headings, body copy |
-| Text secondary | [e.g., Slate Gray] | `[#475569]` | Labels, metadata, captions |
-| Text tertiary | [e.g., Light Slate] | `[#94A3B8]` | Placeholders, hints, timestamps |
-| Text disabled | [e.g., Mist] | `[#CBD5E1]` | Inactive / read-only elements |
-| Text on-primary | White | `[#FFFFFF]` | Text on primary-colored surfaces |
+| Background | Void Black | `#0d0d0d` | Page background (`body`) |
+| Surface | Dark Charcoal | `#111111` | Text areas, inputs, panels, key input |
+| Surface deep | Ink | `#0f0f0f` | Morning blocks, nested containers |
+| Surface raised | Graphite | `#161616` | History items, selected chip background |
+| Border subtle | Shadow | `#1a1a1a` | Entry dividers, privacy panel inner borders |
+| Border | Dim | `#1e1e1e` | Input borders, text area borders, morning block left accent |
+| Border medium | Ash | `#2a2a2a` | Scrollbar thumb, focused text area border |
+| Border strong | Slate | `#333333` | Chip borders, toggle boxes, key input focus |
+| Border hover | Steel | `#555555` | Hovered chip borders |
+| Text primary | Warm Cream | `#e8e4d9` | Main body text, active tab, save button background |
+| Text secondary | Pewter | `#777777` | Inactive tabs, secondary labels, datetime inputs |
+| Text tertiary | Stone | `#666666` | Field labels, ghost buttons, insight MD headings |
+| Text muted | Dusk | `#555555` | Inline buttons, disabled states |
+| Text disabled | Fog | `#444444` | Tag input placeholder text |
+| Text accent | Burnished Cream | `#c8c4b8` | Selected chip text, toggle checkmark |
+| Text on-dark | Near Black | `#0a0a0a` | Text on Electric Mint (insight button) |
+| Text on-primary | Near Black | `#0d0d0d` | Text on Warm Cream (save button) |
+| Insight text | Warm Stone | `#9a9690` | AI output markdown — strong, headings |
 
 ### Semantic / Feedback Colors
 
-| Role | Descriptive Name | Hex | Surface Tint Hex | Usage |
-|------|-----------------|-----|-----------------|-------|
-| Success | [e.g., Forest Green] | `[#16A34A]` | `[#F0FDF4]` | Confirmations, completed states |
-| Warning | [e.g., Amber] | `[#D97706]` | `[#FFFBEB]` | Caution, pending states |
-| Destructive | [e.g., Crimson] | `[#DC2626]` | `[#FEF2F2]` | Errors, delete actions |
-| Info | [e.g., Sky Blue] | `[#0284C7]` | `[#F0F9FF]` | Informational highlights |
+| Role | Descriptive Name | Hex | Usage |
+|------|-----------------|-----|-------|
+| Primary action | Electric Mint | `#4ade80` | Insight / pattern analysis button — the only bright accent |
+| Primary action hover | Bright Mint | `#6aee90` | Hover state on insight button |
+| Danger | Muted Crimson | `#8a4a4a` | Ghost button danger hover (archive, delete actions) |
 
-### Dark Mode Overrides *(if applicable)*
+### Dark Mode
 
-| Role | Light | Dark |
-|------|-------|------|
-| Background | `[#FFFFFF]` | `[#09090B]` |
-| Surface | `[#F8FAFC]` | `[#18181B]` |
-| Surface raised | `[#F1F5F9]` | `[#27272A]` |
-| Border | `[#E2E8F0]` | `[#3F3F46]` |
-| Text primary | `[#0F172A]` | `[#FAFAFA]` |
-| Text secondary | `[#475569]` | `[#A1A1AA]` |
+This app is dark-mode only. There are no light mode overrides.
 
 ---
 
 ## 3. Typography Rules
 
-### Font Families
+### Font Family
 
-- **Primary**: [e.g., Inter] — used for all UI text, headings, and body copy
-- **Monospace**: [e.g., JetBrains Mono] — code blocks, technical data, version numbers
+- **Only font**: IBM Plex Mono (weights 300, 400, 500) — loaded from Google Fonts
+- Applied to: everything — body, inputs, buttons, labels, code
 
-*Fallback stack*: `"[Primary]", system-ui, -apple-system, sans-serif`
+*Fallback stack*: `'IBM Plex Mono', monospace`
+
+There is intentionally no secondary or display font. The monospace aesthetic is core to the product identity.
 
 ### Type Scale
 
+All sizes are small; the app is information-dense and terminal-adjacent.
+
 | Role | Size | Weight | Line Height | Letter Spacing | Usage |
 |------|------|--------|-------------|----------------|-------|
-| Display | [40–48px] | 800 | 1.1 | −0.02em | Hero headlines only |
-| Heading 1 | [30–36px] | 700 | 1.15 | −0.015em | Page titles |
-| Heading 2 | [22–28px] | 600–700 | 1.25 | −0.01em | Section headers |
-| Heading 3 | [18–22px] | 600 | 1.3 | 0 | Sub-headers, card titles |
-| Heading 4 | [15–18px] | 600 | 1.4 | 0 | Tight sub-headers, table headers |
-| Body large | [16–18px] | 400 | 1.6 | 0 | Lead paragraphs, feature text |
-| Body | [14–16px] | 400 | 1.5 | 0 | Default body copy |
-| Body small | [12–14px] | 400 | 1.45 | 0 | Supporting text, captions |
-| Label | [11–13px] | 500–600 | 1.2 | 0.02–0.05em | UI labels, button text, badges |
-| Code | [13px] | 400 | 1.65 | 0 | Inline code, code blocks |
+| Body / textarea | 13px | 400 | 1.7 | 0 | Main text entry (`.text-area`) |
+| Key input | 12px | 400 | — | 0.04em | API key field (`.key-input`) |
+| Save button | 12px | 400 | — | 0.10em | Primary action label (`.save-btn`) |
+| Insight button | 11px | 500 | — | 0.08em | AI action label (`.insight-btn`) |
+| Tab | 11px | 400 | — | 0.12em | Navigation tabs (`.tab`), uppercase |
+| Privacy panel | 11px | 400 | 1.65 | 0 | Data export preview |
+| Ghost / chip / label | 10px | 400–500 | 1 | 0.08–0.14em | Buttons, chips, field labels (`.ghost-btn`, `.chip`, `.field-label`) |
+| Tag input | 10px | 400 | — | 0.08em | Custom tag entry (`.tag-input`) |
+
+All text-transform: uppercase is used sparingly — tabs, ghost buttons, field labels only.
 
 ---
 
 ## 4. Component Stylings
 
-Describe appearance as a designer would — shape, surface, shadow, state transitions. No CSS class names.
+Describe appearance as a designer would — shape, surface, states. No CSS class names in design descriptions.
 
-### Buttons
+### Primary Button (Save)
 
-**Primary**: [Primary color] background, white label text (Label size, medium-heavy weight). [Corner description, e.g., "gently rounded 6px corners"]. [Padding, e.g., "12px top/bottom, 20px left/right"]. No shadow at rest. Hover: slightly deeper shade ([Primary hover hex]). Active: further deepened with subtle inward shadow. Disabled: [Surface raised] background with [Text disabled] label, cursor not-allowed.
+Warm Cream (`#e8e4d9`) background, Near Black (`#0d0d0d`) text. 12px monospace, 0.10em letter spacing. No border, no border-radius — fully sharp corners. Padding: 10px top/bottom, 28px left/right. Hover: opacity drops to 85% (no color change). Disabled: opacity 40%, cursor not-allowed.
 
-**Secondary**: Transparent background with a [1px Border stroke] outline. [Text primary] label. Hover: [Surface raised] background fills in. Active: border deepens to [Border strong].
+### AI Action Button (Insight / Analyze)
 
-**Destructive**: [Destructive color] background, white label. Same shape and size as primary. Hover: darkened destructive shade.
+Electric Mint (`#4ade80`) background, Near Black (`#0a0a0a`) text, 500 weight. 11px, 0.08em letter spacing. Sharp corners. Padding: 10px top/bottom, 24px left/right. Hover: Bright Mint (`#6aee90`) background. Disabled: opacity 35%, cursor not-allowed. This is the only green element in the entire interface — it signals "AI-powered action."
 
-**Ghost / text**: No border, no background fill. [Primary color] label. Hover: [Primary subtle] background appears. Used for inline actions within content.
+### Ghost Button
 
-**Icon button**: Square or circle, [32–40px], same corner treatment. Tooltip required on all icon-only buttons.
+Transparent background and border. Stone (`#666`) text, 10px, uppercase, 0.10em letter spacing. Hover variants: neutral hover → Pewter (`#888`); danger hover → Muted Crimson (`#8a4a4a`); accent hover → Warm Cream (`#e8e4d9`).
 
-### Input Fields
+### Inline Button
 
-[Surface] background with [1px Border stroke], [corner description]. [11–12px] top/bottom padding, [12–16px] left/right padding. Placeholder text in [Text tertiary]. Focus: border transitions to [Primary color] with a [very subtle primary glow / no glow]. Error: border becomes [Destructive] with an error message below in [Destructive] text. Success: border becomes [Success]. Disabled: [Surface raised] background, [Text disabled] text.
+Minimal: transparent, no border. Dusk (`#555`) text, 10px, 0.08em letter spacing. Hover: Pewter (`#999`). Used for secondary in-context actions.
 
-### Cards & Containers
+### Text Area / Input
 
-[Surface] background, [corner description], [border or "hairline border using Border color"]. [shadow description from Section 6]. Inner padding [16–24px]. Hover (if interactive): border subtly deepens, or shadow elevates one level. Selected state: [Primary subtle] background tint with [Primary] left border accent.
+Dark Charcoal (`#111`) background, Dim (`#1e1e1e`) border (1px solid), Warm Cream (`#e8e4d9`) text. 13px body / 14px top-bottom 16px left-right padding. Line height 1.7. Focus: border lightens to Ash (`#2a2a2a`), no glow. No border-radius.
 
-### Navigation — Sidebar
+### API Key Input
 
-[Surface or white] background. Item: [Text secondary] label, [icon size] leading icon. Active item: [Primary subtle] background fill with [Primary] label and icon. Hover: [Surface raised] tint. Dividers between groups use [Border color]. Collapsed state shows icons only with tooltips.
+Same surface as text area — Dark Charcoal background, Dim border. Warm Cream text. 12px, 0.04em tracking. 10px 14px padding. Focus: border becomes Slate (`#333`).
 
-### Navigation — Top Bar
+### Tag Input
 
-[Surface or white] background with a bottom [Border] hairline. Brand mark on the left, primary actions on the right. Active nav item: [Primary] underline (2–3px) or [Primary subtle] pill. Height [48–64px].
+No background, no border — only a bottom border using Shadow (`#222`). Pewter text, 10px, 0.08em. Placeholder in Fog (`#444`). Focus: bottom border lightens to Steel (`#444`). Width: 120px fixed.
 
-### Badges / Tags
+### Category Chips
 
-Compact pill shape, [4px horizontal padding, 2px vertical], [Label small (11–12px), medium weight]. Neutral: [Surface raised] background, [Text secondary] text. Semantic variants use feedback palette surface tints as background with the corresponding strong color for text.
+Transparent background with Slate (`#333`) border (1px solid). Pewter (`#777`) text, 10px, 0.08em. 4px top/bottom, 10px left/right padding. 3px margin between chips. No border-radius — fully square. Hover (pointer devices only): border to Steel (`#555`), text to Light Gray (`#aaa`). Selected state: Graphite (`#161616`) background, Slate (`#666`) border, Burnished Cream (`#c8c4b8`) text.
 
-### Modals & Dialogs
+### Navigation Tabs
 
-Backdrop: semi-transparent [dark overlay] (40–60% opacity). Panel: [Surface or white] background, [corner description, typically more rounded than cards], [Floating elevation shadow from Section 6]. Max-width [480–640px], full-width on mobile with rounded top corners and flat bottom (bottom sheet). Closes on backdrop click and Escape key. Focus trapped inside while open.
+Transparent background with a 1px bottom border as the active indicator. Stone (`#777`) text, 11px, uppercase, 0.12em letter spacing. 6px top/bottom padding. Active: Warm Cream (`#e8e4d9`) text + Warm Cream bottom border. Hover: Pewter (`#999`). Transition 0.2s.
 
-### Tables
+### Log Entries
 
-Header row: [Surface raised] background, [Text secondary] label text (Label size, medium weight), [8–12px] vertical padding. Body rows: alternating white / [Surface] background, or single color with [Border] horizontal dividers between rows. [12–14px] vertical padding per row. Hover: [Surface raised] tint on the hovered row. Selected: [Primary subtle] background.
+Separated by a Shadow (`#1a1a1a`) bottom border (1px). 20px top/bottom padding. Fade-in animation on appearance. Archived entries: 40% opacity.
+
+### Morning Block
+
+Ink (`#0f0f0f`) background. Dim (`#1e1e1e`) left border accent (1px). 12px top/bottom, 14px left/right padding. 14px top margin. Fade-in animation on expansion.
+
+### History Items
+
+10px top/bottom padding. Very Dark (`#161616`) bottom border. Flex row with 12px gap.
+
+### Toggle (Checkbox)
+
+14×14px box, Slate (`#333`) border (1px solid). Checked state: Graphite (`#1a1a1a`) background, Slate (`#666`) border, × symbol in Burnished Cream (`#c8c4b8`) at 11px. No border-radius.
+
+### Privacy / Data Panel
+
+Dark Charcoal (`#111`) background, Shadow (`#1a1a1a`) border. Fade-in animation. Pre-formatted text in Stone (`#666`), 11px, 1.65 line height, `pre-wrap`, max-height 220px with scroll.
+
+### AI Markdown Output
+
+No background or border. Headings and `strong` in Warm Stone (`#9a9690`), weight 500, inherit font-size. `em` is italic. Lists use 1.4em left padding, 0.75em bottom margin. Paragraphs: 0.75em bottom margin.
 
 ---
 
 ## 5. Layout Principles
 
-### Spacing Scale
+### Spacing
 
-Base unit: **[4px or 8px]**. All spacing values are multiples of the base unit.
+There is no formal spacing scale — spacing is set per component. Observed values:
 
-| Token | Value | Typical Usage |
-|-------|-------|---------------|
-| xs | 4px | Inline gaps, icon-to-label spacing |
-| sm | 8px | Tight groupings, compact padding |
-| md | 16px | Component internal padding |
-| lg | 24px | Between related elements |
-| xl | 32px | Section separators |
-| 2xl | 48px | Major section breaks |
-| 3xl | 64–96px | Page-level top/bottom padding |
+| Context | Value |
+|---------|-------|
+| Entry vertical padding | 20px top/bottom |
+| Tab vertical padding | 6px top/bottom |
+| Text area / input padding | 14px 16px |
+| Button padding (save) | 10px 28px |
+| Button padding (insight) | 10px 24px |
+| Chip padding | 4px 10px |
+| Chip gap | 3px |
+| Morning block padding | 12px 14px |
+| Morning block top margin | 14px |
+| History item padding | 10px 0 |
+| History item gap | 12px |
 
 ### Grid & Container
 
-- **Max content width**: [1280–1440px], centered
-- **Gutters**: [16px] mobile, [24px] tablet, [32px] desktop
-- **Column grid**: 12 columns on desktop, 8 on tablet, 4 on mobile
-- **Sidebar width**: [240–280px] (if applicable)
+No grid system — the app is single-column. The container width is managed via inline styles in JSX (check `App()` return for `style={{ maxWidth, padding }}`). On mobile: full-width, single column.
 
-### Whitespace Strategy
+### Scrollbar
 
-[Describe the philosophy, e.g.: "Cards use 24px inner padding for a roomy feel. Sections breathe with 48px vertical gaps. Inline elements and list items use 8px spacing. Dense data views (tables, logs) use 12px row padding to maximize information density."]
+Width: 4px. Track: transparent. Thumb: Ash (`#2a2a2a`), 2px border-radius (the only rounded element in the UI).
 
 ---
 
 ## 6. Depth & Elevation
 
-Describe with evocative language alongside technical values.
+This app is **flat** — no shadows are used. Depth and hierarchy are communicated through:
 
-| Level | Description | CSS Shadow Value | Usage |
-|-------|-------------|-----------------|-------|
-| Flat | No depth | none | Default containers, flush-to-surface elements |
-| Raised | Whisper of depth | `0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)` | Cards, list items, interactive surfaces |
-| Lifted | Clear separation | `0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06)` | Dropdowns, popovers, date pickers |
-| Floating | Prominent elevation | `0 8px 24px rgba(0,0,0,0.14), 0 4px 8px rgba(0,0,0,0.08)` | Modals, dialogs, command palettes |
-| Pinned | Directional depth | `0 2px 8px rgba(0,0,0,0.12)` | Sticky headers, fixed bottom bars |
+- **Color contrast**: darker surfaces for nested containers (morning blocks inside entries)
+- **Borders**: thin 1px borders delineate surfaces rather than shadows
+- **Left border accent**: `border-left: 1px solid #1e1e1e` on morning blocks signals nesting
+- **Opacity**: archived entries at 40% opacity recede visually
 
-**Dark mode elevation**: On dark surfaces, prefer lighter surface colors over shadows to indicate elevation — shadows lose definition against dark backgrounds.
+| Level | Method | Usage |
+|-------|--------|-------|
+| Flat | No shadow, no border | Most containers, page background |
+| Nested | Darker background (`#0f0f0f`) + left border | Morning blocks inside log entries |
+| Inset | Very dark background + border | Text areas, inputs |
+| Receded | 40% opacity | Archived entries |
 
 ---
 
 ## 7. Do's and Don'ts
 
 ### Do
-- Reference palette names (e.g., "Midnight Indigo") in designs; the hex is an implementation detail
-- Follow the [4px or 8px] spacing grid — all spacing values must be multiples of the base unit
-- Left-align body text; center only short UI labels and isolated CTAs
-- Reserve [Primary color] for one focused action per screen — it loses meaning when overused
-- Apply visible focus rings on every interactive element (keyboard accessibility is non-negotiable)
-- Pair status colors with icons or labels — never rely on color alone to communicate state
-- Use the destructive color only for genuinely irreversible actions
+- Use Warm Cream (`#e8e4d9`) for primary interactive elements (save buttons, active state text)
+- Reserve Electric Mint (`#4ade80`) exclusively for AI-powered actions — it is the only bright color
+- Use the existing `.ghost-btn`, `.inline-btn` classes for secondary actions rather than creating new button styles
+- Keep all text in IBM Plex Mono — it is a core part of the product identity
+- Use opacity (40%) for archived/disabled states on containers rather than background color changes
+- Keep borders at 1px solid — never thicker
 
 ### Don't
-- Mix more than two typefaces on one screen
-- Use opacity to create "disabled" text — use the explicit [Text disabled] token
-- Apply decorative shadows to flat designs — choose a consistent elevation story and maintain it
-- Place destructive actions adjacent to primary CTAs without visual separation or a confirmation step
-- Use fully saturated pure black (`#000000`) or pure white (`#FFFFFF`) for text on backgrounds
-- Hardcode hex values in components — always reference design tokens
-- Add new colors outside the palette without updating this file first
+- Add border-radius to any interactive element — the sharp aesthetic is intentional
+- Add shadows or gradients — this design is deliberately flat
+- Introduce any new font — IBM Plex Mono exclusively
+- Use pure white (`#ffffff`) or pure black (`#000000`) — use Warm Cream and Void Black instead
+- Add a second accent color — Electric Mint must remain the only bright element
+- Increase font sizes beyond 13px for body text — the compact density is intentional
+- Use color alone to communicate state — pair color changes with cursor or opacity changes
 
 ---
 
@@ -208,67 +225,62 @@ Describe with evocative language alongside technical values.
 
 ### Breakpoints
 
-| Name | Min Width | Layout |
-|------|-----------|--------|
-| Mobile | 0 | Single column, full-width components, stacked navigation |
-| Tablet (sm) | [640px] | Two columns for cards/grids; side panels collapse to drawers |
-| Tablet (md) | [768px] | Navigation may shift from bottom bar to side panel |
-| Desktop | [1024px] | Full layout, sidebar permanently visible |
-| Wide | [1280px+] | Max-width container centered; no further layout change |
+The app has minimal responsive handling. Primary target is a narrow single-column view.
+
+| Context | Behavior |
+|---------|----------|
+| Touch devices | Chip hover states are disabled via `@media (hover: hover) and (pointer: fine)` |
+| Mobile | Full-width single column; no layout shift |
+| Desktop | Same layout, naturally wider |
+
+No explicit breakpoints for layout change — the single-column design adapts naturally.
 
 ### Touch Targets
 
-Minimum tap target: **44×44px** on mobile. Increase padding rather than altering visual size to meet this requirement. Interactive elements should not be placed within 8px of each other on touch surfaces.
+All buttons use sufficient padding for touch (10px+ vertical). Category chips are 4px vertical — borderline on mobile; avoid reducing further.
 
-### Navigation Patterns
+### Navigation
 
-- **Desktop**: [e.g., Persistent left sidebar]
-- **Tablet**: [e.g., Collapsible sidebar, toggle via hamburger]
-- **Mobile**: [e.g., Bottom navigation bar for primary items, full-screen drawer for secondary]
-
-### Component Adaptations
-
-- **Cards**: [X] per row on desktop → [Y] on tablet → 1 column stacked on mobile
-- **Tables**: Horizontal scroll on mobile; consider card-per-row fallback for dense tables
-- **Modals**: Full-height bottom sheet on mobile (rounded top corners, flat bottom)
-- **Sidebar**: Hidden by default on mobile; slides in from the left as a full-height drawer
+Three tabs (`Tonight` / `Morning` / `Log`) displayed horizontally at all screen sizes. No hamburger menu, no drawer.
 
 ---
 
 ## 9. Agent Prompt Guide
 
-Copy-paste fragments for generating UI consistent with this design system.
-
 ### Color Reference Cheatsheet
 
 ```
-Primary:          [Descriptive Name] ([#hex])
-Primary hover:    [Descriptive Name] ([#hex])
-Primary subtle:   [Descriptive Name] ([#hex])
-Background:       [Descriptive Name] ([#hex])
-Surface:          [Descriptive Name] ([#hex])
-Border:           [Descriptive Name] ([#hex])
-Text primary:     [Descriptive Name] ([#hex])
-Text secondary:   [Descriptive Name] ([#hex])
-Success:          ([#hex])  |  Warning: ([#hex])  |  Error: ([#hex])
+Page background:    Void Black (#0d0d0d)
+Input surface:      Dark Charcoal (#111111)
+Nested container:   Ink (#0f0f0f)
+Border default:     Dim (#1e1e1e)
+Border strong:      Slate (#333333)
+Text primary:       Warm Cream (#e8e4d9)
+Text secondary:     Pewter (#777777)
+Text label:         Stone (#666666)
+Text selected:      Burnished Cream (#c8c4b8)
+AI accent:          Electric Mint (#4ade80) — ONLY for AI-powered actions
+AI accent hover:    Bright Mint (#6aee90)
+Danger:             Muted Crimson (#8a4a4a)
+AI output text:     Warm Stone (#9a9690)
 ```
 
 ### Reusable Prompt Fragments
 
-**New screen or page**:
-> "Build [screen name] following DESIGN.md. Use [Background name] as the page background. Content lives in [Surface name] cards with [corner description] and [elevation level] shadow. All typography follows Section 3's type scale. Navigation uses the [sidebar / top bar] pattern from Section 4."
+**New input or text field**:
+> "Add a text input using the existing `.text-area` or `.key-input` class pattern — Dark Charcoal (#111) background, Dim (#1e1e1e) 1px border, Warm Cream (#e8e4d9) text, IBM Plex Mono, sharp corners. Focus state: border lightens to Ash (#2a2a2a)."
 
-**Form UI**:
-> "Create [form name]. Inputs use [Surface] background with [1px Border stroke], focused state uses a [Primary] border. Submit button is primary style. Show inline validation: [Destructive] border + message below on error, [Success] border on valid. Disabled fields use [Surface raised] with [Text disabled] label."
+**New action button (non-AI)**:
+> "Add a primary action button using the `.save-btn` pattern — Warm Cream (#e8e4d9) background, Near Black (#0d0d0d) text, 12px IBM Plex Mono, 0.10em letter spacing, sharp corners, 10px 28px padding. Hover: opacity 85%."
 
-**Data table or list**:
-> "Build a [table / list] displaying [data type]. Rows use [Body small] text, [12px] vertical padding, [Border] dividers. Header row has [Surface raised] background with [Label] text. Hover row highlights with [Surface raised] tint. Selected row uses [Primary subtle] background with a [Primary] left-border accent."
+**New AI-powered button**:
+> "Add an AI action button using the `.insight-btn` pattern — Electric Mint (#4ade80) background, Near Black (#0a0a0a) text, 11px IBM Plex Mono weight 500, sharp corners, 10px 24px padding. Hover: Bright Mint (#6aee90) background. This is the only bright green element in the UI."
 
-**Dashboard or data display**:
-> "Create a dashboard card showing [metric]. Card uses [Surface] background, [Raised elevation], [corner description]. Heading in [Heading 3] style, value in [Display or Heading 1] style using [Text primary]. Supporting text in [Text secondary]. Use [Success] / [Destructive] for positive / negative trend indicators."
+**New section or container**:
+> "Add a container using the `.morning-block` pattern — Ink (#0f0f0f) background, Dim (#1e1e1e) left border (1px), 12px 14px padding, with the fade-in animation. No shadows, no border-radius."
 
-**Empty state**:
-> "Design an empty state for [feature]. Centered layout, [Text secondary] headline at [Heading 3] size, [Text tertiary] supporting copy at [Body] size. Icon or illustration placeholder above the text. Optional primary CTA button below."
+**New label or field header**:
+> "Add a field label using the `.field-label` pattern — Stone (#666666), 10px IBM Plex Mono, 0.14em letter spacing, uppercase, 10px bottom margin."
 
-**Navigation component**:
-> "Build a [sidebar / top nav] following DESIGN.md Section 4. Active item uses [Primary subtle background + Primary label]. Inactive items use [Text secondary]. Hover uses [Surface raised] tint. Include [icon + label] pairs. On mobile, [collapse pattern from Section 8]."
+**New navigation or tab item**:
+> "Add a tab using the `.tab` pattern — Stone (#777) text, 11px uppercase IBM Plex Mono, 0.12em tracking, 6px vertical padding. Active state: Warm Cream (#e8e4d9) text + 1px bottom border in Warm Cream. No background change."

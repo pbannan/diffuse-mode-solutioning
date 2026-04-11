@@ -1,61 +1,48 @@
 # Testing
 
-## Strategy
+## No Test Framework
 
-| Level | Scope | When to write |
-|-------|-------|---------------|
-| Unit | Pure functions, utilities, isolated components | Always |
-| Integration | API routes, DB operations, service layer | When touching DB or external services |
-| E2E | Critical user flows (login, checkout, etc.) | Sparingly — only for flows that would be catastrophic to break |
+This project has no automated test runner, no Jest, no Vitest, no testing library. All validation is manual, in-browser.
 
-Prefer unit tests. Integration tests are slower but necessary for paths that touch the database. E2E tests are expensive — add them only when a unit + integration combination cannot catch the failure.
+## Manual Testing Checklist
 
-## Commands
+Run through these steps after every change before marking a task complete:
 
-```bash
-[TEST_SINGLE]     # run one test by name (use during development)
-[TEST_ALL]        # run full suite (required before committing)
-[TEST_COVERAGE]   # coverage report (review periodically, not per-commit)
-[E2E]             # end-to-end tests (slow; run before releasing)
-```
+### Core flow
+- [ ] Open `index.html` in a browser (Chrome recommended; also spot-check Safari/Firefox)
+- [ ] **Tonight tab**: type a focus problem → Save → confirm it appears at the top of the Log
+- [ ] **Morning tab**: add a waking log entry with categories and ideas → Save → confirm it appears under the night entry in Log
+- [ ] **Log tab**: edit a night entry → confirm history entry is created → restore a version
+- [ ] Archive an entry → confirm it disappears (or appears dimmed with "show archived" toggle)
 
-## File Conventions
+### Persistence
+- [ ] After making changes, hard-refresh the page (`Cmd+Shift+R` / `Ctrl+Shift+R`)
+- [ ] Confirm all data survives the reload (localStorage round-trip)
+- [ ] Open DevTools → Application → Local Storage → verify data is base64-encoded JSON
 
-- **Unit / integration**: co-located with source — `utils/format.ts` → `utils/format.test.ts`
-- **E2E**: `e2e/[flow-name].spec.ts`
-- **Fixtures / factories**: `tests/factories/[entity].ts`
-- **Shared mocks**: `tests/mocks/[service].ts`
+### API integration (if AI output is affected)
+- [ ] Enter a real Anthropic API key in the Log tab
+- [ ] Run a pattern analysis and confirm the response renders as formatted Markdown
+- [ ] Confirm cost display updates after the call completes
+- [ ] Test with no API key — confirm the button is disabled or shows a clear error
 
-## What to Test
+### Error states
+- [ ] Check the browser console: **zero errors and zero warnings** before marking complete
+- [ ] Confirm nothing breaks when localStorage is empty (first-time user)
 
-**Always test**:
-- Boundary conditions: empty arrays, null/undefined, zero, max values
-- Error paths: what happens when the DB query fails, external API is down
-- Business logic that isn't obvious from reading the code
-- Any bug that is fixed — write the failing test first, then fix
+## Regression Areas to Watch
 
-**Skip testing**:
-- Third-party library internals (trust the library)
-- Trivial getters/setters with no logic
-- Presentation-only components (snapshot tests add noise without value)
-- Things that are already tested by framework infrastructure
+Changes in one area often break these unexpectedly:
 
-## Test Quality
+- **Entry persistence**: Any change to the entry data shape must handle legacy entries (morningLog singular → morningLogs array migration in `getMorningLogs()`)
+- **Base64 encoding**: Entries with emoji or non-ASCII characters must survive encode/decode
+- **Archive toggle**: Archived entries must not appear in Morning tab's "tonight's focus" query
+- **Category chips**: Custom tags ("Other") must persist alongside standard CATEGORIES selections
+- **Pattern caching**: `PATTERNS_STORAGE` cache keyed on time box value — changing the key orphans cached results
 
-- One assertion focus per test — use multiple tests instead of one mega-test
-- Test names describe the scenario: `"returns null when user is not found"`
-- Test behavior, not implementation — internals can change without breaking behavior
-- No shared mutable state between tests (`beforeEach` should fully reset)
-- Async tests: always `await`, and always test the rejection/error case too
-- Prefer real implementations over mocks where the real thing is fast enough
+## Before Marking Complete
 
-## Before Marking a Task Complete
-
-Run all of these; all must be green with zero errors:
-
-```bash
-[TEST_SINGLE]   # confirm the specific test(s) for the changed code pass
-[TYPECHECK]     # zero type errors
-[LINT]          # zero lint warnings
-[TEST_ALL]      # full suite green
-```
+1. All manual checklist steps above pass
+2. Zero browser console errors
+3. Data persists across hard refresh
+4. The changed feature works on mobile viewport (375px width minimum)

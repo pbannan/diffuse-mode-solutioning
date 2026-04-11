@@ -1,47 +1,45 @@
-# [PROJECT_NAME]
+# Diffuse Mode Solutioning
 
-[One to two sentences describing what this project does and who it serves.]
+A minimal single-page app for sleep-powered problem-solving. Set a focus problem before bed, log waking thoughts each morning, and surface patterns over time using Claude AI.
 
 ## Stack
 
-- **Framework**: [e.g., Next.js 14 — App Router]
-- **Language**: [e.g., TypeScript 5 strict]
-- **Database**: [e.g., PostgreSQL via Prisma]
-- **Auth**: [e.g., NextAuth.js v5]
-- **Styling**: [e.g., Tailwind CSS v3]
-- **Deploy**: [e.g., Vercel + GitHub Actions]
+- **Framework**: Vanilla React 18 (loaded via CDN — no npm, no build step)
+- **Language**: JavaScript (no TypeScript, no transpilation beyond Babel CDN)
+- **Persistence**: localStorage (base64-encoded JSON — no server, no database)
+- **AI**: Claude Haiku (`claude-haiku-4-5-20251001`) via direct Anthropic API fetch
+- **Styling**: Hand-crafted CSS + IBM Plex Mono (Google Fonts)
+- **Deploy**: Static file — open `index.html` directly in any browser
 
 ## Commands
 
 ```bash
-[INSTALL]         # e.g., pnpm install
-[DEV]             # e.g., pnpm dev  →  localhost:3000
-[TEST_SINGLE]     # e.g., pnpm test -- -t "test name"
-[TEST_ALL]        # e.g., pnpm test
-[TYPECHECK]       # e.g., pnpm typecheck
-[LINT]            # e.g., pnpm lint:fix
-[BUILD]           # e.g., pnpm build
-[MIGRATE]         # e.g., pnpm prisma migrate dev
+# No install step — no dependencies
+
+# Dev (option 1): open directly
+open index.html
+
+# Dev (option 2): local server to avoid CORS issues
+python3 -m http.server 8080   # → localhost:8080
+
+# No build, no typecheck, no lint, no test runner
 ```
 
 ## Source Layout
 
 ```
-src/
-  app/          # routes & pages
-  components/   # shared UI components
-  lib/          # third-party configs (singletons)
-  utils/        # pure helpers (no side effects)
-  hooks/        # custom React hooks
-  types/        # TypeScript type definitions
+index.html    # entire application — all HTML, CSS, and JavaScript in one file
+              #   CSS:   lines ~14–89  (global styles and component classes)
+              #   JS:    lines ~94+    (React components, state, API calls)
+              #   HTML:  lines ~91–93  (<div id="root">)
 ```
 
 ## Non-Negotiable Rules
 
-- Never commit `.env`, secrets, or credentials
-- Run `[TYPECHECK]` and `[TEST_ALL]` before marking any task complete
-- Prefer editing existing files over creating new ones
-- No speculative abstractions — implement what is asked, nothing more
+- Never commit API keys, localStorage data, or anything from `.env`
+- All changes go in `index.html` — do not create new files unless explicitly asked
+- Preserve the no-build-step constraint: no npm imports, no ES modules, CDN only
+- Test in-browser after every change — there is no test suite or type checker
 
 ## Detailed Instructions
 

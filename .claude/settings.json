@@ -10,6 +10,8 @@
       "Bash(git fetch origin*)",
       "Bash(git checkout *)",
       "Bash(git pull origin *)",
+      "Bash(python3 -m http.server*)",
+      "Bash(open index.html)",
       "Bash(gh issue view *)",
       "Bash(gh pr view *)",
       "Bash(gh pr diff *)",
@@ -19,21 +21,10 @@
       "Bash(git push --force*)",
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
-      "Bash(rm -rf*)"
-    ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[LINT] 2>&1 | tail -5",
-            "timeout": 15000
-          }
-        ]
-      }
+      "Bash(rm -rf*)",
+      "Bash(npm *)",
+      "Bash(pnpm *)",
+      "Bash(yarn *)"
     ]
   }
 }
