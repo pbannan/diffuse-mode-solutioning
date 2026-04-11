@@ -566,8 +566,8 @@
           });
           return line;
         }).join("\n\n");
-        const inputEst  = Math.round(logText.length / 4) + 300; // ~4 chars/token + prompt overhead
-        const outputEst = 350; // max_tokens cap
+        const inputEst  = Math.round(logText.length / 3.5) + 80; // ~3.5 chars/token + ~80 token prompt preamble
+        const outputEst = 150; // typical haiku response length for this prompt
         return { tokens: inputEst + outputEst, cost: calcCost(inputEst, outputEst) };
       })();
       const allCustomCategories = [...new Set(
@@ -600,7 +600,7 @@
 
           {/* ── CONTENT BAND ── */}
           <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxWidth: 560, padding: "0 24px" }}>
+          <div style={{ width: "100%", maxWidth: 560, padding: "28px 24px 56px" }}>
 
             {/* ── TONIGHT ── */}
             {view === "tonight" && (
