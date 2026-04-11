@@ -43,9 +43,9 @@
     .inline-btn { background: transparent; color: #555; border: none; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; cursor: pointer; transition: color 0.2s; padding: 0; line-height: 1; }
     .inline-btn:hover { color: #999; }
 
-    .insight-btn { background: transparent; color: #555; border: 1px solid #2a2a2a; padding: 8px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; }
-    .insight-btn:hover:not(:disabled) { color: #e8e4d9; border-color: #555; }
-    .insight-btn:disabled { opacity: 0.4; cursor: default; }
+    .insight-btn { background: #4ade80; color: #0a0a0a; border: none; padding: 10px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+    .insight-btn:hover:not(:disabled) { background: #6aee90; }
+    .insight-btn:disabled { opacity: 0.35; cursor: default; }
 
     .chip { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #333; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s; color: #777; background: transparent; user-select: none; margin: 3px 3px 3px 0; }
     @media (hover: hover) and (pointer: fine) { .chip:hover { border-color: #555; color: #aaa; } }
@@ -554,14 +554,32 @@
       const timeBoxStart = getTimeBoxStart(patternTimeBox);
       const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
       const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
+      const nextRunEstimate = (() => {
+        if (timeBoxEntries.length < 3) return null;
+        const sliced = timeBoxEntries.slice(0, 20);
+        const logText = sliced.map((e, i) => {
+          let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
+          getMorningLogs(e).forEach((w, wi) => {
+            line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
+            if (w.categories.length) line += ` | Categories: ${w.categories.join(", ")}`;
+            if (w.ideas) line += `\n   Ideas: "${w.ideas}"`;
+          });
+          return line;
+        }).join("\n\n");
+        const inputEst  = Math.round(logText.length / 3.5) + 80; // ~3.5 chars/token + ~80 token prompt preamble
+        const outputEst = 150; // typical haiku response length for this prompt
+        return { tokens: inputEst + outputEst, cost: calcCost(inputEst, outputEst) };
+      })();
       const allCustomCategories = [...new Set(
         activeEntries.flatMap(e => getMorningLogs(e).flatMap(w => w.categories.filter(c => !CATEGORIES.includes(c))))
       )];
 
       // ── Render ────────────────────────────────────────────────
       return (
-        <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 24px 100px" }}>
-          <div style={{ width: "100%", maxWidth: 560 }}>
+        <div style={{ minHeight: "100vh", background: "#000", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", flexDirection: "column" }}>
+          {/* ── HEADER BAND ── */}
+          <div style={{ background: "#0d0d0d", width: "100%" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", padding: "48px 24px 0" }}>
 
             {/* Header */}
             <div style={{ marginBottom: 40 }}>
@@ -577,6 +595,12 @@
                 <div key={id} className={`tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{label}</div>
               ))}
             </div>
+          </div>
+          </div>
+
+          {/* ── CONTENT BAND ── */}
+          <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+          <div style={{ width: "100%", maxWidth: 560, padding: "28px 24px 56px" }}>
 
             {/* ── TONIGHT ── */}
             {view === "tonight" && (
@@ -930,14 +954,6 @@
                       </div>
                     ))}
 
-                    {/* Export */}
-                    {activeEntries.length > 0 && (
-                      <div style={{ marginTop: 28, display: "flex", gap: 16 }}>
-                        <button className="ghost-btn" onClick={() => exportData("txt")}>↓ Export as text</button>
-                        <button className="ghost-btn" onClick={() => exportData("json")}>↓ Export as JSON</button>
-                      </div>
-                    )}
-
                     {/* Archived section */}
                     {archivedEntries.length > 0 && (
                       <div style={{ marginTop: 24 }}>
@@ -975,12 +991,6 @@
                   </div>
                 ) : (
                   <>
-                    {/* Section header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
-                      <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
-                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>uses Anthropic AI</div>
-                    </div>
-
                     {/* Time box selector */}
                     <div style={{ marginBottom: 18 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
@@ -995,15 +1005,24 @@
                           ))}
                         </select>
                       </div>
-                      <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>
+                      <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
                         {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
                         {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
                         {timeBoxEntries.length === 0 && " · no entries in this range"}
+                        {nextRunEstimate && ` · ~${nextRunEstimate.tokens.toLocaleString()} tokens · ~${formatCost(nextRunEstimate.cost)}`}
                       </div>
                     </div>
 
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <button className="ghost-btn" onClick={() => setShowApiKeyInput(s => !s)}>
+                        {showApiKeyInput ? "▾" : "▸"} {apiKey.trim() ? "Edit API key" : "Add API key"}
+                      </button>
+                      <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
+                        {loadingInsight ? "Analyzing..." : "Find patterns →"}
+                      </button>
+                    </div>
                     {showApiKeyInput && (
-                      <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginTop: 14, marginBottom: 4 }}>
                         <div className="field-label">Anthropic API Key</div>
                         <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
                         <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -1017,22 +1036,14 @@
                         </div>
                       </div>
                     )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
-                        {loadingInsight ? "Analyzing..." : "→ Find patterns"}
-                      </button>
-                      {!showApiKeyInput && (
-                        <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>API key</button>
-                      )}
-                    </div>
                     {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                     {insight && (
                       <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
-                        <div className="insight-md" style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}
+                        <div className="insight-md" style={{ padding: "16px 16px 28px", background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}
                           dangerouslySetInnerHTML={{ __html: window.marked.parse(insight) }}
                         />
                         {lastUsage && (
-                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
+                          <div style={{ marginTop: 6, fontSize: 10, color: "#555", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
                             <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
                             <span>est. {formatCost(lastUsage.costUsd)}</span>
                           </div>
@@ -1042,13 +1053,13 @@
 
                     {/* Pattern history */}
                     {patternHistory.length > 0 && (
-                      <div style={{ marginTop: 28 }}>
+                      <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1e1e1e" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                           <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
                             {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
                           </button>
                           {totalCostUsd > 0 && (
-                            <span style={{ fontSize: 10, color: "#3a3a3a", letterSpacing: "0.06em" }}>
+                            <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
                               total est. {formatCost(totalCostUsd)}
                             </span>
                           )}
@@ -1056,14 +1067,14 @@
                         {showPatternHistory && (
                           <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
                             {patternHistory.map(rec => (
-                              <div key={rec.id} style={{ padding: "12px 0", borderBottom: "1px solid #111" }}>
+                              <div key={rec.id} style={{ padding: "16px 0", borderBottom: "1px solid #1e1e1e" }}>
                                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                                  <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
-                                  <span style={{ fontSize: 10, color: "#444" }}>
+                                  <span style={{ fontSize: 10, color: "#666", letterSpacing: "0.08em" }}>{formatDate(rec.ts)}</span>
+                                  <span style={{ fontSize: 10, color: "#555" }}>
                                     {TIME_BOX_OPTIONS.find(o => o.value === rec.timeBox)?.label ?? rec.timeBox} · {rec.entriesCount} {rec.entriesCount === 1 ? "entry" : "entries"}
                                   </span>
                                   {rec.usage?.inputTokens != null && (
-                                    <span style={{ fontSize: 10, color: "#3a3a3a" }}>
+                                    <span style={{ fontSize: 10, color: "#555" }}>
                                       {(rec.usage.inputTokens + rec.usage.outputTokens).toLocaleString()} tokens · est. {formatCost(rec.usage.costUsd)}
                                     </span>
                                   )}
@@ -1082,28 +1093,41 @@
               </div>
             )}
 
+          </div>
+          </div>
+
+          {/* ── FOOTER BAND ── */}
+          <div style={{ background: "#0d0d0d", width: "100%" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 24px 32px" }}>
             {/* Global footer */}
-            <div style={{ marginTop: 60, paddingTop: 16, borderTop: "1px solid #111", fontSize: 10, color: "#666", letterSpacing: "0.05em", lineHeight: 1.8 }}>
+            <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.05em", lineHeight: 1.8 }}>
               <div>Data is stored locally and never shared without your permission.</div>
+              <div>'Find Patterns' sends data to Anthropic.</div>
               <div style={{ marginTop: 12 }}>
-                {!showClearConfirm ? (
-                  <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(true)}>
-                    Clear all data
-                  </button>
-                ) : (
-                  <div>
-                    <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+                <span>Export data as: </span>
+                <button className="ghost-btn" style={{ fontSize: 10, display: "inline", padding: "2px 6px" }} onClick={() => exportData("txt")}>Text</button>
+                <span style={{ margin: "0 6px" }}>|</span>
+                <button className="ghost-btn" style={{ fontSize: 10, display: "inline", padding: "2px 6px" }} onClick={() => exportData("json")}>JSON</button>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(s => !s)}>
+                  Clear all data
+                </button>
+                {showClearConfirm && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>
                       This action cannot be undone. It will clear all data including nightly focus, waking thoughts, and API key &amp; pattern analysis results. Are you sure?
                     </div>
                     <div style={{ display: "flex", gap: 20 }}>
                       <button className="ghost-btn danger" onClick={clearAllData}>Yes</button>
-                      <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>No</button>
+                      <button className="ghost-btn" onClick={() => setShowClearConfirm(false)}>Cancel</button>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
+          </div>
           </div>
         </div>
       );
