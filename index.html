@@ -43,9 +43,9 @@
     .inline-btn { background: transparent; color: #555; border: none; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; cursor: pointer; transition: color 0.2s; padding: 0; line-height: 1; }
     .inline-btn:hover { color: #999; }
 
-    .insight-btn { background: transparent; color: #555; border: 1px solid #2a2a2a; padding: 8px 20px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; }
-    .insight-btn:hover:not(:disabled) { color: #e8e4d9; border-color: #555; }
-    .insight-btn:disabled { opacity: 0.4; cursor: default; }
+    .insight-btn { background: #4ade80; color: #0a0a0a; border: none; padding: 10px 24px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+    .insight-btn:hover:not(:disabled) { background: #6aee90; }
+    .insight-btn:disabled { opacity: 0.35; cursor: default; }
 
     .chip { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #333; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s; color: #777; background: transparent; user-select: none; margin: 3px 3px 3px 0; }
     @media (hover: hover) and (pointer: fine) { .chip:hover { border-color: #555; color: #aaa; } }
@@ -554,6 +554,7 @@
       const timeBoxStart = getTimeBoxStart(patternTimeBox);
       const timeBoxEntries = timeBoxStart ? activeEntries.filter(e => new Date(e.ts) >= timeBoxStart) : activeEntries;
       const totalCostUsd = patternHistory.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0);
+      const totalHistoryTokens = patternHistory.reduce((sum, r) => sum + (r.usage?.inputTokens ?? 0) + (r.usage?.outputTokens ?? 0), 0);
       const allCustomCategories = [...new Set(
         activeEntries.flatMap(e => getMorningLogs(e).flatMap(w => w.categories.filter(c => !CATEGORIES.includes(c))))
       )];
@@ -584,7 +585,7 @@
 
           {/* ── CONTENT BAND ── */}
           <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxWidth: 560, padding: "36px 24px 0" }}>
+          <div style={{ width: "100%", maxWidth: 560, padding: "20px 24px 0" }}>
 
             {/* ── TONIGHT ── */}
             {view === "tonight" && (
@@ -1001,6 +1002,7 @@
                         {timeBoxEntries.length} {timeBoxEntries.length === 1 ? "entry" : "entries"} in range
                         {timeBoxEntries.length < 3 && timeBoxEntries.length > 0 && ` · need ${3 - timeBoxEntries.length} more to analyze`}
                         {timeBoxEntries.length === 0 && " · no entries in this range"}
+                        {totalHistoryTokens > 0 && ` · ${totalHistoryTokens.toLocaleString()} tokens · ${formatCost(totalCostUsd)}`}
                       </div>
                     </div>
 
@@ -1044,16 +1046,11 @@
 
                     {/* Pattern history */}
                     {patternHistory.length > 0 && (
-                      <div style={{ marginTop: 28 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #1e1e1e" }}>
+                        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
                           <button className="inline-btn" onClick={() => setShowPatternHistory(s => !s)}>
                             {showPatternHistory ? "▾" : "▸"} Pattern history ({patternHistory.length})
                           </button>
-                          {totalCostUsd > 0 && (
-                            <span style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em" }}>
-                              total est. {formatCost(totalCostUsd)}
-                            </span>
-                          )}
                         </div>
                         {showPatternHistory && (
                           <div style={{ paddingLeft: 10, borderLeft: "1px solid #1a1a1a", animation: "fi 0.2s ease" }}>
