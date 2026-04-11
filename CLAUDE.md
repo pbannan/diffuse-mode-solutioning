@@ -1,27 +1,62 @@
-# Claude Code — Global Instructions
+# [PROJECT_NAME]
 
-## PR and issue comment formatting
+[One to two sentences describing what this project does and who it serves.]
 
-When writing PR descriptions, issue comments, or any GitHub-facing text body, **do not hard-wrap lines**. Write each paragraph as a single continuous line with no embedded newlines. GitHub renders bare newlines as line breaks, which causes mid-sentence breaks in the rendered output. Separate paragraphs with a blank line instead.
+## Stack
 
-## After completing work on a branch
+- **Framework**: [e.g., Next.js 14 — App Router]
+- **Language**: [e.g., TypeScript 5 strict]
+- **Database**: [e.g., PostgreSQL via Prisma]
+- **Auth**: [e.g., NextAuth.js v5]
+- **Styling**: [e.g., Tailwind CSS v3]
+- **Deploy**: [e.g., Vercel + GitHub Actions]
 
-At the end of every session where you've pushed commits to a branch, provide the
-following copy-paste commands so the user can test locally. Replace
-`<branch-name>` with the actual branch name.
+## Commands
 
 ```bash
-git fetch origin
-git checkout <branch-name>
-git pull origin <branch-name>
+[INSTALL]         # e.g., pnpm install
+[DEV]             # e.g., pnpm dev  →  localhost:3000
+[TEST_SINGLE]     # e.g., pnpm test -- -t "test name"
+[TEST_ALL]        # e.g., pnpm test
+[TYPECHECK]       # e.g., pnpm typecheck
+[LINT]            # e.g., pnpm lint:fix
+[BUILD]           # e.g., pnpm build
+[MIGRATE]         # e.g., pnpm prisma migrate dev
 ```
 
-Always include this block verbatim (with the real branch name substituted) in
-your final response before signing off.
+## Source Layout
+
+```
+src/
+  app/          # routes & pages
+  components/   # shared UI components
+  lib/          # third-party configs (singletons)
+  utils/        # pure helpers (no side effects)
+  hooks/        # custom React hooks
+  types/        # TypeScript type definitions
+```
+
+## Non-Negotiable Rules
+
+- Never commit `.env`, secrets, or credentials
+- Run `[TYPECHECK]` and `[TEST_ALL]` before marking any task complete
+- Prefer editing existing files over creating new ones
+- No speculative abstractions — implement what is asked, nothing more
+
+## Detailed Instructions
+
+@.claude/instructions/architecture.md
+@.claude/instructions/conventions.md
+@.claude/instructions/git-workflow.md
+@.claude/instructions/testing.md
+
+## Design System
+
+For any UI or component work, reference @DESIGN.md for colors, typography, spacing, and component conventions.
 
 ---
 
-## GitHub MCP tools — availability and retries
+## GitHub MCP Tools — Availability and Retries
 
 The GitHub MCP server runs with `MCP_CONNECTION_NONBLOCKING=true`, which means the session starts before the server finishes connecting. Tools may not be available immediately. The `gh` CLI and `hub` CLI are **not** available in this environment.
 
@@ -34,16 +69,11 @@ The GitHub MCP server runs with `MCP_CONNECTION_NONBLOCKING=true`, which means t
    - **For writing** (commenting, closing, creating PRs): there is no authenticated shell fallback. Tell the user: *"The GitHub MCP server is not responding. Please start a new session and try again."*
    - Do not use `curl` against `api.github.com` — unauthenticated API calls are limited to 60 requests/hour and the quota is often already exhausted.
 
----
+## Closing GitHub Issues with the MCP Tools
 
-## Closing GitHub issues with the MCP tools
+Do **not** comment on or close an issue after pushing. There may be many pushes with their own commit messages — duplicate issue comments are not needed.
 
-Do **not** comment on or close an issue after pushing. There may be many
-pushes with their own commit messages — duplicate issue comments are not
-needed.
-
-Wait until the user explicitly asks you to close the issue. That means the
-user has tested locally, approved the PR, and is ready to wrap up.
+Wait until the user explicitly asks you to close the issue. That means the user has tested locally, approved the PR, and is ready to wrap up.
 
 When the user asks you to close the issue, first run ToolSearch for `"mcp__github"` to ensure the tools are loaded, then do both steps below in order. If tools remain unavailable after retrying per the instructions above, report failure to the user.
 
