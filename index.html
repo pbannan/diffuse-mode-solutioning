@@ -560,8 +560,10 @@
 
       // ── Render ────────────────────────────────────────────────
       return (
-        <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 24px 100px" }}>
-          <div style={{ width: "100%", maxWidth: 560 }}>
+        <div style={{ minHeight: "100vh", background: "#000", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", flexDirection: "column" }}>
+          {/* ── HEADER BAND ── */}
+          <div style={{ background: "#0d0d0d", width: "100%" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", padding: "48px 24px 0" }}>
 
             {/* Header */}
             <div style={{ marginBottom: 40 }}>
@@ -577,6 +579,12 @@
                 <div key={id} className={`tab ${view === id ? "active" : ""}`} onClick={() => setView(id)}>{label}</div>
               ))}
             </div>
+          </div>
+          </div>
+
+          {/* ── CONTENT BAND ── */}
+          <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
+          <div style={{ width: "100%", maxWidth: 560, padding: "36px 24px 0" }}>
 
             {/* ── TONIGHT ── */}
             {view === "tonight" && (
@@ -975,11 +983,6 @@
                   </div>
                 ) : (
                   <>
-                    {/* Section header */}
-                    <div style={{ marginBottom: 18 }}>
-                      <div className="field-label" style={{ marginBottom: 0 }}>Pattern Analysis</div>
-                    </div>
-
                     {/* Time box selector */}
                     <div style={{ marginBottom: 18 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
@@ -1001,8 +1004,16 @@
                       </div>
                     </div>
 
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <button className="ghost-btn" onClick={() => setShowApiKeyInput(s => !s)}>
+                        {showApiKeyInput ? "▾" : "▸"} {apiKey.trim() ? "Edit API key" : "Add API key"}
+                      </button>
+                      <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
+                        {loadingInsight ? "Analyzing..." : "Find patterns →"}
+                      </button>
+                    </div>
                     {showApiKeyInput && (
-                      <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginTop: 14, marginBottom: 4 }}>
                         <div className="field-label">Anthropic API Key</div>
                         <input className="key-input" type="password" value={apiKey} onChange={e => saveApiKey(e.target.value)} placeholder="sk-ant-..." spellCheck={false} />
                         <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -1016,14 +1027,6 @@
                         </div>
                       </div>
                     )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      <button className="insight-btn" onClick={getInsight} disabled={loadingInsight || timeBoxEntries.length < 3}>
-                        {loadingInsight ? "Analyzing..." : "→ Find patterns"}
-                      </button>
-                      {!showApiKeyInput && (
-                        <button className="ghost-btn" onClick={() => setShowApiKeyInput(true)}>API key</button>
-                      )}
-                    </div>
                     {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                     {insight && (
                       <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
@@ -1081,9 +1084,16 @@
               </div>
             )}
 
+          </div>
+          </div>
+
+          {/* ── FOOTER BAND ── */}
+          <div style={{ background: "#0d0d0d", width: "100%" }}>
+          <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 24px 32px" }}>
             {/* Global footer */}
-            <div style={{ marginTop: 60, paddingTop: 16, borderTop: "1px solid #111", fontSize: 10, color: "#666", letterSpacing: "0.05em", lineHeight: 1.8 }}>
+            <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.05em", lineHeight: 1.8 }}>
               <div>Data is stored locally and never shared without your permission.</div>
+              <div>'Find Patterns' sends data to Anthropic.</div>
               <div style={{ marginTop: 12 }}>
                 {!showClearConfirm ? (
                   <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(true)}>
@@ -1103,6 +1113,7 @@
               </div>
             </div>
 
+          </div>
           </div>
         </div>
       );
