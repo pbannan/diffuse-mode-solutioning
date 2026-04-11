@@ -600,7 +600,7 @@
 
           {/* ── CONTENT BAND ── */}
           <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "100%", maxWidth: 560, padding: "20px 24px 0" }}>
+          <div style={{ width: "100%", maxWidth: 560, padding: "0 24px" }}>
 
             {/* ── TONIGHT ── */}
             {view === "tonight" && (
@@ -1047,11 +1047,11 @@
                     {insightError && <div style={{ marginTop: 14, fontSize: 12, color: "#5a3a3a", lineHeight: 1.6 }}>{insightError}</div>}
                     {insight && (
                       <div style={{ marginTop: 20, animation: "fi 0.4s ease" }}>
-                        <div className="insight-md" style={{ padding: 16, background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}
+                        <div className="insight-md" style={{ padding: "16px 16px 28px", background: "#111", border: "1px solid #1a1a1a", fontSize: 13, lineHeight: 1.85, color: "#777" }}
                           dangerouslySetInnerHTML={{ __html: window.marked.parse(insight) }}
                         />
                         {lastUsage && (
-                          <div style={{ marginTop: 6, fontSize: 10, color: "#444", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
+                          <div style={{ marginTop: 6, fontSize: 10, color: "#555", letterSpacing: "0.06em", display: "flex", gap: 16 }}>
                             <span>{lastUsage.inputTokens.toLocaleString()} in · {lastUsage.outputTokens.toLocaleString()} out</span>
                             <span>est. {formatCost(lastUsage.costUsd)}</span>
                           </div>
