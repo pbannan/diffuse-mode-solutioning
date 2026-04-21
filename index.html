@@ -86,6 +86,8 @@
     .insight-md ul, .insight-md ol { padding-left: 1.4em; margin-bottom: 0.75em; }
     .insight-md li { margin-bottom: 0.25em; }
     .insight-md h1, .insight-md h2, .insight-md h3 { font-size: inherit; font-weight: 500; color: #9a9690; margin-bottom: 0.5em; letter-spacing: 0.06em; }
+
+    .pin-input { -webkit-text-security: disc; }
   </style>
 </head>
 <body>
@@ -629,9 +631,10 @@
           </div>
           <div style={{ fontSize: 10, color: "#555", marginBottom: 24 }}>Enter your PIN to unlock</div>
           <input
-            className="key-input"
-            type="password"
+            className="key-input pin-input"
+            type="text"
             inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="PIN"
             value={authPinInput}
             autoFocus
@@ -674,15 +677,15 @@
               type="text"
               placeholder="Your name"
               value={authNewUsername}
-              autoFocus
               onChange={e => setAuthNewUsername(e.target.value)}
               style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
             />
             <div className="field-label" style={{ marginBottom: 6 }}>PIN</div>
             <input
-              className="key-input"
-              type="password"
+              className="key-input pin-input"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               placeholder="Choose a PIN"
               value={authNewPin}
               onChange={e => setAuthNewPin(e.target.value)}
@@ -690,9 +693,10 @@
             />
             <div className="field-label" style={{ marginBottom: 6 }}>Confirm PIN</div>
             <input
-              className="key-input"
-              type="password"
+              className="key-input pin-input"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               placeholder="Repeat PIN"
               value={authNewPinConfirm}
               onChange={e => setAuthNewPinConfirm(e.target.value)}
