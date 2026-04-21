@@ -86,8 +86,6 @@
     .insight-md ul, .insight-md ol { padding-left: 1.4em; margin-bottom: 0.75em; }
     .insight-md li { margin-bottom: 0.25em; }
     .insight-md h1, .insight-md h2, .insight-md h3 { font-size: inherit; font-weight: 500; color: #9a9690; margin-bottom: 0.5em; letter-spacing: 0.06em; }
-
-    .pin-input { -webkit-text-security: disc; }
   </style>
 </head>
 <body>
@@ -200,6 +198,114 @@
       if (entry.morningLog) return [{ id: entry.morningLog.ts || "legacy", ...entry.morningLog }];
       return [];
     }
+
+    const UserSelectScreen = ({ users, setAuthSelectedUser, setAuthPinInput, setAuthPinError, setAuthView, setAuthNewUsername, setAuthNewPin, setAuthNewPinConfirm }) => {
+      const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
+      return (
+        <div>
+          <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Select account</div>
+          {users.length === 0 ? (
+            <div style={{ fontSize: 11, color: "#555", marginBottom: 20 }}>No accounts yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+              {users.map(u => (
+                <button key={u.id} className="ghost-btn" style={{ textAlign: "left", fontSize: 11, padding: "8px 12px", letterSpacing: "0.08em" }}
+                  onClick={() => { setAuthSelectedUser(u); setAuthPinInput(""); setAuthPinError(""); setAuthView("login"); }}>
+                  {u.username}
+                </button>
+              ))}
+            </div>
+          )}
+          {hasLegacy && users.length === 0 && (
+            <div style={{ fontSize: 10, color: "#555", marginBottom: 16 }}>Existing entries found — create an account to import them.</div>
+          )}
+          <button className="ghost-btn" style={{ fontSize: 10, letterSpacing: "0.10em" }} onClick={() => { setAuthNewUsername(""); setAuthNewPin(""); setAuthNewPinConfirm(""); setAuthView("create"); }}>
+            + Create account
+          </button>
+          <div style={{ marginTop: 40, fontSize: 10, color: "#444", lineHeight: 1.7 }}>
+            All data is stored locally on this device. Each account's entries are separate and cannot be accessed by other accounts.
+          </div>
+        </div>
+      );
+    };
+
+    const LoginScreen = ({ authSelectedUser, authPinInput, setAuthPinInput, authPinError, setAuthPinError, doLogin, setAuthView }) => (
+      <div>
+        <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
+          {authSelectedUser && authSelectedUser.username}
+        </div>
+        <div style={{ fontSize: 10, color: "#555", marginBottom: 24 }}>Enter your PIN to unlock</div>
+        <input
+          className="key-input"
+          type="password"
+          inputMode="numeric"
+          placeholder="PIN"
+          value={authPinInput}
+          autoFocus
+          onChange={e => { setAuthPinInput(e.target.value); setAuthPinError(""); }}
+          onKeyDown={e => { if (e.key === "Enter") doLogin(); }}
+          style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+        />
+        {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <button className="save-btn" onClick={doLogin}>Unlock</button>
+          <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinInput(""); setAuthPinError(""); }}>← Back</button>
+        </div>
+      </div>
+    );
+
+    const CreateUserScreen = ({ authNewUsername, setAuthNewUsername, authNewPin, setAuthNewPin, authNewPinConfirm, setAuthNewPinConfirm, authPinError, authCreating, users, doCreateUser, setAuthView, setAuthPinError }) => {
+      const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
+      const isFirstUser = users.length === 0;
+      return (
+        <div>
+          <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Create account</div>
+          {hasLegacy && isFirstUser && (
+            <div style={{ fontSize: 10, color: "#555", marginBottom: 20 }}>Existing entries will be imported to your account.</div>
+          )}
+          <div className="field-label" style={{ marginBottom: 6 }}>Username</div>
+          <input
+            className="key-input"
+            type="text"
+            placeholder="Your name"
+            value={authNewUsername}
+            autoFocus
+            onChange={e => setAuthNewUsername(e.target.value)}
+            style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+          />
+          <div className="field-label" style={{ marginBottom: 6 }}>PIN</div>
+          <input
+            className="key-input"
+            type="password"
+            inputMode="numeric"
+            placeholder="Choose a PIN"
+            value={authNewPin}
+            onChange={e => setAuthNewPin(e.target.value)}
+            style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+          />
+          <div className="field-label" style={{ marginBottom: 6 }}>Confirm PIN</div>
+          <input
+            className="key-input"
+            type="password"
+            inputMode="numeric"
+            placeholder="Repeat PIN"
+            value={authNewPinConfirm}
+            onChange={e => setAuthNewPinConfirm(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") doCreateUser(); }}
+            style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+          />
+          {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <button className="save-btn" onClick={doCreateUser} disabled={authCreating}>
+              {authCreating ? "Creating..." : "Create account"}
+            </button>
+            {users.length > 0 && (
+              <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinError(""); }}>← Back</button>
+            )}
+          </div>
+        </div>
+      );
+    };
 
     function App() {
       // Auth
@@ -587,68 +693,12 @@
         setInsight(""); setLastUsage(null); setShowClearConfirm(false);
       };
 
-      // ── Auth screens ──────────────────────────────────────────
+      // ── Auth handlers ─────────────────────────────────────────
       const handleLogin = (user) => {
         setCurrentUser({ id: user.id, username: user.username });
         setAuthPinInput("");
         setAuthPinError("");
       };
-
-      const UserSelectScreen = () => {
-        const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
-        return (
-          <div>
-            <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Select account</div>
-            {users.length === 0 ? (
-              <div style={{ fontSize: 11, color: "#555", marginBottom: 20 }}>No accounts yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-                {users.map(u => (
-                  <button key={u.id} className="ghost-btn" style={{ textAlign: "left", fontSize: 11, padding: "8px 12px", letterSpacing: "0.08em" }}
-                    onClick={() => { setAuthSelectedUser(u); setAuthPinInput(""); setAuthPinError(""); setAuthView("login"); }}>
-                    {u.username}
-                  </button>
-                ))}
-              </div>
-            )}
-            {hasLegacy && users.length === 0 && (
-              <div style={{ fontSize: 10, color: "#555", marginBottom: 16 }}>Existing entries found — create an account to import them.</div>
-            )}
-            <button className="ghost-btn" style={{ fontSize: 10, letterSpacing: "0.10em" }} onClick={() => { setAuthNewUsername(""); setAuthNewPin(""); setAuthNewPinConfirm(""); setAuthView("create"); }}>
-              + Create account
-            </button>
-            <div style={{ marginTop: 40, fontSize: 10, color: "#444", lineHeight: 1.7 }}>
-              All data is stored locally on this device. Each account's entries are separate and cannot be accessed by other accounts.
-            </div>
-          </div>
-        );
-      };
-
-      const LoginScreen = () => (
-        <div>
-          <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
-            {authSelectedUser && authSelectedUser.username}
-          </div>
-          <div style={{ fontSize: 10, color: "#555", marginBottom: 24 }}>Enter your PIN to unlock</div>
-          <input
-            className="key-input pin-input"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            placeholder="PIN"
-            value={authPinInput}
-            autoFocus
-            onChange={e => { setAuthPinInput(e.target.value); setAuthPinError(""); }}
-            onKeyDown={e => { if (e.key === "Enter") doLogin(); }}
-            style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
-          />
-          {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            <button className="save-btn" onClick={doLogin}>Unlock</button>
-            <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinInput(""); setAuthPinError(""); }}>← Back</button>
-          </div>
-        </div>
-      );
 
       const doLogin = () => {
         if (!authPinInput.trim()) { setAuthPinError("Enter your PIN."); return; }
@@ -660,60 +710,6 @@
             setAuthPinInput("");
           }
         });
-      };
-
-      const CreateUserScreen = () => {
-        const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
-        const isFirstUser = users.length === 0;
-        return (
-          <div>
-            <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Create account</div>
-            {hasLegacy && isFirstUser && (
-              <div style={{ fontSize: 10, color: "#555", marginBottom: 20 }}>Existing entries will be imported to your account.</div>
-            )}
-            <div className="field-label" style={{ marginBottom: 6 }}>Username</div>
-            <input
-              className="key-input"
-              type="text"
-              placeholder="Your name"
-              value={authNewUsername}
-              onChange={e => setAuthNewUsername(e.target.value)}
-              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
-            />
-            <div className="field-label" style={{ marginBottom: 6 }}>PIN</div>
-            <input
-              className="key-input pin-input"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="Choose a PIN"
-              value={authNewPin}
-              onChange={e => setAuthNewPin(e.target.value)}
-              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
-            />
-            <div className="field-label" style={{ marginBottom: 6 }}>Confirm PIN</div>
-            <input
-              className="key-input pin-input"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="Repeat PIN"
-              value={authNewPinConfirm}
-              onChange={e => setAuthNewPinConfirm(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") doCreateUser(); }}
-              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
-            />
-            {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <button className="save-btn" onClick={doCreateUser} disabled={authCreating}>
-                {authCreating ? "Creating..." : "Create account"}
-              </button>
-              {users.length > 0 && (
-                <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinError(""); }}>← Back</button>
-              )}
-            </div>
-          </div>
-        );
       };
 
       const doCreateUser = () => {
@@ -738,12 +734,6 @@
           setAuthCreating(false);
           handleLogin(newUser);
         });
-      };
-
-      const AuthScreen = () => {
-        if (authView === "create") return <CreateUserScreen />;
-        if (authView === "login") return <LoginScreen />;
-        return <UserSelectScreen />;
       };
 
       const logout = () => {
@@ -788,7 +778,33 @@
         <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ maxWidth: 400, width: "100%", padding: "48px 24px" }}>
             <div style={{ fontSize: 10, letterSpacing: "0.2em", color: "#666", textTransform: "uppercase", marginBottom: 40 }}>Diffuse Mode Solutioning</div>
-            <AuthScreen />
+            {authView === "create"
+              ? <CreateUserScreen
+                  authNewUsername={authNewUsername} setAuthNewUsername={setAuthNewUsername}
+                  authNewPin={authNewPin} setAuthNewPin={setAuthNewPin}
+                  authNewPinConfirm={authNewPinConfirm} setAuthNewPinConfirm={setAuthNewPinConfirm}
+                  authPinError={authPinError} authCreating={authCreating}
+                  users={users} doCreateUser={doCreateUser}
+                  setAuthView={setAuthView} setAuthPinError={setAuthPinError}
+                />
+              : authView === "login"
+              ? <LoginScreen
+                  authSelectedUser={authSelectedUser}
+                  authPinInput={authPinInput} setAuthPinInput={setAuthPinInput}
+                  authPinError={authPinError} setAuthPinError={setAuthPinError}
+                  doLogin={doLogin} setAuthView={setAuthView}
+                />
+              : <UserSelectScreen
+                  users={users}
+                  setAuthSelectedUser={setAuthSelectedUser}
+                  setAuthPinInput={setAuthPinInput}
+                  setAuthPinError={setAuthPinError}
+                  setAuthView={setAuthView}
+                  setAuthNewUsername={setAuthNewUsername}
+                  setAuthNewPin={setAuthNewPin}
+                  setAuthNewPinConfirm={setAuthNewPinConfirm}
+                />
+            }
           </div>
         </div>
       );
