@@ -170,7 +170,7 @@
     }
 
     function blankMorning() {
-      return { wakingThoughts: "", categories: [], ideas: "", relatedToFocus: false };
+      return { wakingThoughts: "", categories: [], ideas: "", relatedToFocus: false, sleepQuality: null };
     }
 
     // Returns the array of waking log entries for an entry, handling legacy single morningLog
@@ -182,7 +182,7 @@
 
     function App() {
       const [entries, setEntries] = useState(loadEntries);
-      const [view, setView] = useState("tonight");
+      const [view, setView] = useState(() => { const h = new Date().getHours(); return (h >= 4 && h < 12) ? "morning" : "tonight"; });
 
       // Tonight
       const [nightInput, setNightInput] = useState("");
@@ -268,7 +268,7 @@
       };
 
       const startEditWaking = (w) => {
-        setWakingDraft({ wakingThoughts: w.wakingThoughts, categories: [...w.categories], ideas: w.ideas, relatedToFocus: w.relatedToFocus });
+        setWakingDraft({ wakingThoughts: w.wakingThoughts, categories: [...w.categories], ideas: w.ideas, relatedToFocus: w.relatedToFocus, sleepQuality: w.sleepQuality ?? null });
         setEditingWakingId(w.id);
         setWakingShowOther(w.categories.some(c => !CATEGORIES.includes(c)));
       };
@@ -327,7 +327,7 @@
       // ── Log — waking edit ────────────────────────────────────
       const startLogWakingEdit = (entryId, w) => {
         setEditingLogWaking({ entryId, wakingId: w.id });
-        setLogWakingDraft({ wakingThoughts: w.wakingThoughts || "", categories: [...w.categories], ideas: w.ideas || "", relatedToFocus: w.relatedToFocus || false, ts: toDatetimeLocal(w.ts) });
+        setLogWakingDraft({ wakingThoughts: w.wakingThoughts || "", categories: [...w.categories], ideas: w.ideas || "", relatedToFocus: w.relatedToFocus || false, sleepQuality: w.sleepQuality ?? null, ts: toDatetimeLocal(w.ts) });
         setLogWakingCustomTag("");
         setLogWakingShowOther(w.categories.some(c => !CATEGORIES.includes(c)));
       };
@@ -368,7 +368,7 @@
           const updated = logs.map(w => {
             if (w.id !== wakingId) return w;
             const newTs = draftToSave.ts ? new Date(draftToSave.ts).toISOString() : w.ts;
-            return { ...w, wakingThoughts: draftToSave.wakingThoughts, categories: draftToSave.categories, ideas: draftToSave.ideas, relatedToFocus: draftToSave.relatedToFocus, ts: newTs };
+            return { ...w, wakingThoughts: draftToSave.wakingThoughts, categories: draftToSave.categories, ideas: draftToSave.ideas, relatedToFocus: draftToSave.relatedToFocus, sleepQuality: draftToSave.sleepQuality, ts: newTs };
           });
           return { ...e, morningLogs: updated };
         });
@@ -439,6 +439,14 @@
         persistEntries(next);
       };
 
+      const toggleResolved = (id) => {
+        const next = entries.map(e =>
+          e.id === id ? { ...e, resolved: !e.resolved } : e
+        );
+        setEntries(next);
+        persistEntries(next);
+      };
+
       // ── Patterns ──────────────────────────────────────────────
       const saveApiKey = (k) => {
         setApiKey(k);
@@ -465,9 +473,10 @@
         try {
           const sliced = timeBoxEntries.slice(0, 20);
           const log = sliced.map((e, i) => {
-            let line = `${i + 1}. [Night ${formatShortDate(e.ts)}] ${e.text}`;
+            let line = `${i + 1}. [Night ${formatShortDate(e.ts)}]${e.resolved ? " [RESOLVED]" : ""} ${e.text}`;
             getMorningLogs(e).forEach((w, wi) => {
               line += `\n   [Waking ${wi + 1} ${formatShortDate(w.ts)}] "${w.wakingThoughts}"`;
+              if (w.sleepQuality) line += ` | Sleep: ${w.sleepQuality}/5`;
               if (w.categories.length) line += ` | Categories: ${w.categories.join(", ")}`;
               if (w.ideas) line += `\n   Ideas: "${w.ideas}"`;
             });
@@ -668,6 +677,17 @@
                               <textarea className="text-area" value={wakingDraft.ideas} onChange={e => setWakingDraft(d => ({ ...d, ideas: e.target.value }))} placeholder="Any ideas, threads, or insights that surfaced..." rows={4} />
                             </div>
                             <div style={{ marginBottom: 20 }}>
+                              <div className="field-label">Sleep quality</div>
+                              <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                                {[1,2,3,4,5].map(n => (
+                                  <div key={n} className={`chip ${wakingDraft.sleepQuality === n ? "selected" : ""}`}
+                                    onClick={() => setWakingDraft(d => ({ ...d, sleepQuality: d.sleepQuality === n ? null : n }))}
+                                    style={{ minWidth: 32, justifyContent: "center" }}>{n}</div>
+                                ))}
+                              </div>
+                              <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>1 poor → 5 great</div>
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
                               <div className="toggle-row" onClick={() => setWakingDraft(d => ({ ...d, relatedToFocus: !d.relatedToFocus }))}>
                                 <div className={`toggle-box ${wakingDraft.relatedToFocus ? "checked" : ""}`} />
                                 <span style={{ fontSize: 12, color: wakingDraft.relatedToFocus ? "#c8c4b8" : "#777", letterSpacing: "0.04em" }}>Related to last night's focus</span>
@@ -691,6 +711,7 @@
                             {w.categories.length > 0 && <div style={{ fontSize: 10, color: "#666", letterSpacing: "0.06em", marginBottom: 4 }}>{w.categories.map(c => CATEGORIES.includes(c) ? c : `Other: ${c}`).join(" · ")}</div>}
                             {w.ideas && <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 4, fontStyle: "italic" }}>{w.ideas}</div>}
                             {w.relatedToFocus && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 6 }}>related to focus</div>}
+                            {w.sleepQuality && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 4 }}>sleep: {w.sleepQuality}/5</div>}
                           </div>
                         )}
                       </div>
@@ -738,6 +759,17 @@
                           <textarea className="text-area" value={wakingDraft.ideas} onChange={e => setWakingDraft(d => ({ ...d, ideas: e.target.value }))} placeholder="Any ideas, threads, or insights that surfaced..." rows={4} />
                         </div>
                         <div style={{ marginBottom: 20 }}>
+                          <div className="field-label">Sleep quality</div>
+                          <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                            {[1,2,3,4,5].map(n => (
+                              <div key={n} className={`chip ${wakingDraft.sleepQuality === n ? "selected" : ""}`}
+                                onClick={() => setWakingDraft(d => ({ ...d, sleepQuality: d.sleepQuality === n ? null : n }))}
+                                style={{ minWidth: 32, justifyContent: "center" }}>{n}</div>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>1 poor → 5 great</div>
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
                           <div className="toggle-row" onClick={() => setWakingDraft(d => ({ ...d, relatedToFocus: !d.relatedToFocus }))}>
                             <div className={`toggle-box ${wakingDraft.relatedToFocus ? "checked" : ""}`} />
                             <span style={{ fontSize: 12, color: wakingDraft.relatedToFocus ? "#c8c4b8" : "#777", letterSpacing: "0.04em" }}>Related to last night's focus</span>
@@ -782,6 +814,9 @@
                           <div style={{ display: "flex", gap: 14, flexShrink: 0, marginLeft: 12 }}>
                             {editingId !== entry.id && (
                               <>
+                                <button className={`ghost-btn ${entry.resolved ? "accent" : ""}`} onClick={() => toggleResolved(entry.id)}>
+                                  {entry.resolved ? "✓ Resolved" : "Resolve"}
+                                </button>
                                 <button className="ghost-btn accent" onClick={() => startEdit(entry)}>Edit</button>
                                 <button className="ghost-btn danger" onClick={() => archiveEntry(entry.id)}>Archive</button>
                               </>
@@ -810,7 +845,10 @@
                             </div>
                           </div>
                         ) : (
-                          <div style={{ fontSize: 13, lineHeight: 1.75, color: "#a8a49a" }}>{entry.text}</div>
+                          <div>
+                            <div style={{ fontSize: 13, lineHeight: 1.75, color: "#a8a49a" }}>{entry.text}</div>
+                            {entry.resolved && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.08em", marginTop: 6 }}>✓ resolved</div>}
+                          </div>
                         )}
 
                         {/* Morning waking log blocks */}
@@ -860,6 +898,17 @@
                                     <textarea className="text-area" value={logWakingDraft.ideas} onChange={e => setLogWakingDraft(d => ({ ...d, ideas: e.target.value }))} rows={3} />
                                   </div>
                                   <div style={{ marginBottom: 14 }}>
+                                    <div className="field-label">Sleep quality</div>
+                                    <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                                      {[1,2,3,4,5].map(n => (
+                                        <div key={n} className={`chip ${logWakingDraft.sleepQuality === n ? "selected" : ""}`}
+                                          onClick={() => setLogWakingDraft(d => ({ ...d, sleepQuality: d.sleepQuality === n ? null : n }))}
+                                          style={{ minWidth: 32, justifyContent: "center" }}>{n}</div>
+                                      ))}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: "#444", letterSpacing: "0.06em" }}>1 poor → 5 great</div>
+                                  </div>
+                                  <div style={{ marginBottom: 14 }}>
                                     <div className="field-label">Date & time</div>
                                     <input type="datetime-local" className="datetime-input" value={logWakingDraft.ts} onChange={e => setLogWakingDraft(d => ({ ...d, ts: e.target.value }))} />
                                   </div>
@@ -890,6 +939,7 @@
                                     <div style={{ fontSize: 12, color: "#555", lineHeight: 1.65, marginTop: 6, fontStyle: "italic" }}>{w.ideas}</div>
                                   )}
                                   {w.relatedToFocus && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 6 }}>related to focus</div>}
+                                  {w.sleepQuality && <div style={{ fontSize: 10, color: "#555", letterSpacing: "0.06em", marginTop: 4 }}>sleep: {w.sleepQuality}/5</div>}
                                 </>
                               )}
                             </div>
