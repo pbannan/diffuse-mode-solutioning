@@ -99,6 +99,25 @@
     const NIGHT_PROMPT = "What are you working on?";
     const CATEGORIES = ["Last night's problem", "Work", "Personal", "Health", "Creative", "Relationships", "Other"];
     const PATTERNS_STORAGE = "nightly-focus-patterns-v1";
+    const USERS_KEY = "nightly-focus-users";
+
+    function userKey(userId, base) { return `${base}-${userId}`; }
+
+    function loadUsers() {
+      try {
+        const r = localStorage.getItem(USERS_KEY);
+        if (!r) return [];
+        try { return JSON.parse(b64dec(r)); } catch { return JSON.parse(r); }
+      } catch { return []; }
+    }
+    function persistUsers(users) {
+      localStorage.setItem(USERS_KEY, b64enc(JSON.stringify(users)));
+    }
+    async function hashPin(pin) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pin));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
     const HAIKU_INPUT_COST_PER_M  = 0.80;  // $/1M tokens (claude-haiku-4-5)
     const HAIKU_OUTPUT_COST_PER_M = 4.00;
     const TIME_BOX_OPTIONS = [
@@ -140,15 +159,15 @@
       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
-    function loadEntries() {
+    function loadEntries(userId) {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(userKey(userId, STORAGE_KEY));
         if (!raw) return [];
         try { return JSON.parse(b64dec(raw)); } catch { return JSON.parse(raw); } // migrate legacy plain JSON
       } catch { return []; }
     }
-    function persistEntries(entries) {
-      localStorage.setItem(STORAGE_KEY, b64enc(JSON.stringify(entries)));
+    function persistEntries(userId, entries) {
+      localStorage.setItem(userKey(userId, STORAGE_KEY), b64enc(JSON.stringify(entries)));
     }
 
     // UTF-8-safe base64 helpers (btoa/atob are Latin-1 only)
@@ -181,7 +200,19 @@
     }
 
     function App() {
-      const [entries, setEntries] = useState(loadEntries);
+      // Auth
+      const [users, setUsers] = useState(loadUsers);
+      const [currentUser, setCurrentUser] = useState(null); // { id, username } once logged in
+      const [authView, setAuthView] = useState("select");   // "select" | "login" | "create"
+      const [authSelectedUser, setAuthSelectedUser] = useState(null);
+      const [authPinInput, setAuthPinInput] = useState("");
+      const [authPinError, setAuthPinError] = useState("");
+      const [authNewUsername, setAuthNewUsername] = useState("");
+      const [authNewPin, setAuthNewPin] = useState("");
+      const [authNewPinConfirm, setAuthNewPinConfirm] = useState("");
+      const [authCreating, setAuthCreating] = useState(false);
+
+      const [entries, setEntries] = useState([]);
       const [view, setView] = useState("tonight");
 
       // Tonight
@@ -217,20 +248,10 @@
       const [loadingInsight, setLoadingInsight] = useState(false);
       const [insightError, setInsightError] = useState("");
       const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-      const [apiKey, setApiKey] = useState(() => {
-        const stored = localStorage.getItem(API_KEY_STORAGE);
-        if (!stored) return "";
-        try { return b64dec(stored); } catch { return stored; } // migrate legacy plain key
-      });
-      const [rememberKey, setRememberKey] = useState(() => !!localStorage.getItem(API_KEY_STORAGE));
+      const [apiKey, setApiKey] = useState("");
+      const [rememberKey, setRememberKey] = useState(false);
       const [patternTimeBox, setPatternTimeBox] = useState("month");
-      const [patternHistory, setPatternHistory] = useState(() => {
-        try {
-          const r = localStorage.getItem(PATTERNS_STORAGE);
-          if (!r) return [];
-          try { return JSON.parse(b64dec(r)); } catch { return JSON.parse(r); } // migrate legacy plain JSON
-        } catch { return []; }
-      });
+      const [patternHistory, setPatternHistory] = useState([]);
       const [showPatternHistory, setShowPatternHistory] = useState(false);
       const [lastUsage, setLastUsage] = useState(null);
       const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -240,6 +261,24 @@
       useEffect(() => {
         if (view === "tonight" && nightTextareaRef.current) nightTextareaRef.current.focus();
       }, [view]);
+
+      // Load per-user data after login; reset when logged out
+      useEffect(() => {
+        if (!currentUser) {
+          setEntries([]); setApiKey(""); setRememberKey(false); setPatternHistory([]);
+          return;
+        }
+        setEntries(loadEntries(currentUser.id));
+        const storedKey = localStorage.getItem(userKey(currentUser.id, API_KEY_STORAGE));
+        if (storedKey) {
+          try { setApiKey(b64dec(storedKey)); setRememberKey(true); } catch { setApiKey(storedKey); setRememberKey(true); }
+        }
+        const storedPH = localStorage.getItem(userKey(currentUser.id, PATTERNS_STORAGE));
+        if (storedPH) {
+          try { setPatternHistory(JSON.parse(b64dec(storedPH))); }
+          catch { try { setPatternHistory(JSON.parse(storedPH)); } catch {} }
+        }
+      }, [currentUser && currentUser.id]);
 
       const activeEntries = entries.filter(e => !e.deleted);
       const mostRecent = activeEntries[0] || null;
@@ -255,7 +294,7 @@
         };
         const next = [entry, ...entries];
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
         setNightInput("");
         setNightSaved(true);
         setTimeout(() => setNightSaved(false), 2000);
@@ -318,7 +357,7 @@
           e.id === mostRecent.id ? { ...e, morningLogs: updated } : e
         );
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
         cancelWaking();
         setWakingSaved(true);
         setTimeout(() => setWakingSaved(false), 2000);
@@ -373,7 +412,7 @@
           return { ...e, morningLogs: updated };
         });
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
         cancelLogWakingEdit();
       };
 
@@ -400,7 +439,7 @@
             : e
         );
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
         cancelEdit();
       };
 
@@ -418,7 +457,7 @@
             : e
         );
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
         setExpandedHistory(null);
       };
 
@@ -428,7 +467,7 @@
           e.id === id ? { ...e, deleted: true, deletedAt: new Date().toISOString() } : e
         );
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
       };
 
       const restoreEntry = (id) => {
@@ -436,24 +475,24 @@
           e.id === id ? { ...e, deleted: false, deletedAt: undefined } : e
         );
         setEntries(next);
-        persistEntries(next);
+        persistEntries(currentUser.id, next);
       };
 
       // ── Patterns ──────────────────────────────────────────────
       const saveApiKey = (k) => {
         setApiKey(k);
         if (k.trim().startsWith("sk-")) setInsightError("");
-        if (rememberKey) localStorage.setItem(API_KEY_STORAGE, b64enc(k));
-        else localStorage.removeItem(API_KEY_STORAGE);
+        if (rememberKey) localStorage.setItem(userKey(currentUser.id, API_KEY_STORAGE), b64enc(k));
+        else localStorage.removeItem(userKey(currentUser.id, API_KEY_STORAGE));
       };
       const toggleRememberKey = () => {
         const next = !rememberKey;
         setRememberKey(next);
-        if (next && apiKey) localStorage.setItem(API_KEY_STORAGE, b64enc(apiKey));
-        else localStorage.removeItem(API_KEY_STORAGE);
+        if (next && apiKey) localStorage.setItem(userKey(currentUser.id, API_KEY_STORAGE), b64enc(apiKey));
+        else localStorage.removeItem(userKey(currentUser.id, API_KEY_STORAGE));
       };
       const removeStoredKey = () => {
-        localStorage.removeItem(API_KEY_STORAGE);
+        localStorage.removeItem(userKey(currentUser.id, API_KEY_STORAGE));
         setApiKey("");
         setRememberKey(false);
       };
@@ -511,7 +550,7 @@
           };
           const nextHistory = [record, ...patternHistory];
           setPatternHistory(nextHistory);
-          localStorage.setItem(PATTERNS_STORAGE, b64enc(JSON.stringify(nextHistory)));
+          localStorage.setItem(userKey(currentUser.id, PATTERNS_STORAGE), b64enc(JSON.stringify(nextHistory)));
         } catch (e) { setInsightError(`Error: ${e.message}`); }
         setLoadingInsight(false);
       };
@@ -539,11 +578,177 @@
       };
 
       const clearAllData = () => {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(API_KEY_STORAGE);
-        localStorage.removeItem(PATTERNS_STORAGE);
+        localStorage.removeItem(userKey(currentUser.id, STORAGE_KEY));
+        localStorage.removeItem(userKey(currentUser.id, API_KEY_STORAGE));
+        localStorage.removeItem(userKey(currentUser.id, PATTERNS_STORAGE));
         setEntries([]); setApiKey(""); setRememberKey(false); setPatternHistory([]);
         setInsight(""); setLastUsage(null); setShowClearConfirm(false);
+      };
+
+      // ── Auth screens ──────────────────────────────────────────
+      const handleLogin = (user) => {
+        setCurrentUser({ id: user.id, username: user.username });
+        setAuthPinInput("");
+        setAuthPinError("");
+      };
+
+      const UserSelectScreen = () => {
+        const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
+        return (
+          <div>
+            <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Select account</div>
+            {users.length === 0 ? (
+              <div style={{ fontSize: 11, color: "#555", marginBottom: 20 }}>No accounts yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {users.map(u => (
+                  <button key={u.id} className="ghost-btn" style={{ textAlign: "left", fontSize: 11, padding: "8px 12px", letterSpacing: "0.08em" }}
+                    onClick={() => { setAuthSelectedUser(u); setAuthPinInput(""); setAuthPinError(""); setAuthView("login"); }}>
+                    {u.username}
+                  </button>
+                ))}
+              </div>
+            )}
+            {hasLegacy && users.length === 0 && (
+              <div style={{ fontSize: 10, color: "#555", marginBottom: 16 }}>Existing entries found — create an account to import them.</div>
+            )}
+            <button className="ghost-btn" style={{ fontSize: 10, letterSpacing: "0.10em" }} onClick={() => { setAuthNewUsername(""); setAuthNewPin(""); setAuthNewPinConfirm(""); setAuthView("create"); }}>
+              + Create account
+            </button>
+            <div style={{ marginTop: 40, fontSize: 10, color: "#444", lineHeight: 1.7 }}>
+              All data is stored locally on this device. Each account's entries are separate and cannot be accessed by other accounts.
+            </div>
+          </div>
+        );
+      };
+
+      const LoginScreen = () => (
+        <div>
+          <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
+            {authSelectedUser && authSelectedUser.username}
+          </div>
+          <div style={{ fontSize: 10, color: "#555", marginBottom: 24 }}>Enter your PIN to unlock</div>
+          <input
+            className="key-input"
+            type="password"
+            inputMode="numeric"
+            placeholder="PIN"
+            value={authPinInput}
+            autoFocus
+            onChange={e => { setAuthPinInput(e.target.value); setAuthPinError(""); }}
+            onKeyDown={e => { if (e.key === "Enter") doLogin(); }}
+            style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+          />
+          {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <button className="save-btn" onClick={doLogin}>Unlock</button>
+            <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinInput(""); setAuthPinError(""); }}>← Back</button>
+          </div>
+        </div>
+      );
+
+      const doLogin = () => {
+        if (!authPinInput.trim()) { setAuthPinError("Enter your PIN."); return; }
+        hashPin(authPinInput).then(hash => {
+          if (hash === authSelectedUser.pinHash) {
+            handleLogin(authSelectedUser);
+          } else {
+            setAuthPinError("Incorrect PIN.");
+            setAuthPinInput("");
+          }
+        });
+      };
+
+      const CreateUserScreen = () => {
+        const hasLegacy = !!(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(API_KEY_STORAGE) || localStorage.getItem(PATTERNS_STORAGE));
+        const isFirstUser = users.length === 0;
+        return (
+          <div>
+            <div style={{ fontSize: 11, color: "#666", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 28 }}>Create account</div>
+            {hasLegacy && isFirstUser && (
+              <div style={{ fontSize: 10, color: "#555", marginBottom: 20 }}>Existing entries will be imported to your account.</div>
+            )}
+            <div className="field-label" style={{ marginBottom: 6 }}>Username</div>
+            <input
+              className="key-input"
+              type="text"
+              placeholder="Your name"
+              value={authNewUsername}
+              autoFocus
+              onChange={e => setAuthNewUsername(e.target.value)}
+              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+            />
+            <div className="field-label" style={{ marginBottom: 6 }}>PIN</div>
+            <input
+              className="key-input"
+              type="password"
+              inputMode="numeric"
+              placeholder="Choose a PIN"
+              value={authNewPin}
+              onChange={e => setAuthNewPin(e.target.value)}
+              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+            />
+            <div className="field-label" style={{ marginBottom: 6 }}>Confirm PIN</div>
+            <input
+              className="key-input"
+              type="password"
+              inputMode="numeric"
+              placeholder="Repeat PIN"
+              value={authNewPinConfirm}
+              onChange={e => setAuthNewPinConfirm(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") doCreateUser(); }}
+              style={{ width: "100%", marginBottom: 16, boxSizing: "border-box" }}
+            />
+            {authPinError && <div style={{ fontSize: 10, color: "#8a4a4a", marginBottom: 12 }}>{authPinError}</div>}
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <button className="save-btn" onClick={doCreateUser} disabled={authCreating}>
+                {authCreating ? "Creating..." : "Create account"}
+              </button>
+              {users.length > 0 && (
+                <button className="ghost-btn" style={{ fontSize: 10 }} onClick={() => { setAuthView("select"); setAuthPinError(""); }}>← Back</button>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      const doCreateUser = () => {
+        if (!authNewUsername.trim()) { setAuthPinError("Enter a username."); return; }
+        if (!authNewPin) { setAuthPinError("Choose a PIN."); return; }
+        if (authNewPin !== authNewPinConfirm) { setAuthPinError("PINs don't match."); return; }
+        setAuthCreating(true);
+        hashPin(authNewPin).then(pinHash => {
+          const newUser = { id: String(Date.now()), username: authNewUsername.trim(), pinHash, createdAt: new Date().toISOString() };
+          // Migrate legacy data for first user
+          if (users.length === 0) {
+            const legacyEntries = localStorage.getItem(STORAGE_KEY);
+            if (legacyEntries) { localStorage.setItem(userKey(newUser.id, STORAGE_KEY), legacyEntries); localStorage.removeItem(STORAGE_KEY); }
+            const legacyKey = localStorage.getItem(API_KEY_STORAGE);
+            if (legacyKey) { localStorage.setItem(userKey(newUser.id, API_KEY_STORAGE), legacyKey); localStorage.removeItem(API_KEY_STORAGE); }
+            const legacyPH = localStorage.getItem(PATTERNS_STORAGE);
+            if (legacyPH) { localStorage.setItem(userKey(newUser.id, PATTERNS_STORAGE), legacyPH); localStorage.removeItem(PATTERNS_STORAGE); }
+          }
+          const nextUsers = [...users, newUser];
+          persistUsers(nextUsers);
+          setUsers(nextUsers);
+          setAuthCreating(false);
+          handleLogin(newUser);
+        });
+      };
+
+      const AuthScreen = () => {
+        if (authView === "create") return <CreateUserScreen />;
+        if (authView === "login") return <LoginScreen />;
+        return <UserSelectScreen />;
+      };
+
+      const logout = () => {
+        setCurrentUser(null);
+        setEntries([]); setNightInput(""); setNightSaved(false);
+        setApiKey(""); setRememberKey(false);
+        setPatternHistory([]); setInsight(""); setLastUsage(null); setShowPatternHistory(false);
+        setAuthView("select"); setAuthPinInput(""); setAuthPinError(""); setAuthSelectedUser(null);
+        setView("tonight");
       };
 
       // ── Derived ───────────────────────────────────────────────
@@ -575,6 +780,15 @@
       )];
 
       // ── Render ────────────────────────────────────────────────
+      if (!currentUser) return (
+        <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ maxWidth: 400, width: "100%", padding: "48px 24px" }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.2em", color: "#666", textTransform: "uppercase", marginBottom: 40 }}>Diffuse Mode Solutioning</div>
+            <AuthScreen />
+          </div>
+        </div>
+      );
+
       return (
         <div style={{ minHeight: "100vh", background: "#000", color: "#e8e4d9", fontFamily: "'IBM Plex Mono', 'Courier New', monospace", display: "flex", flexDirection: "column" }}>
           {/* ── HEADER BAND ── */}
@@ -1110,9 +1324,14 @@
                 <button className="ghost-btn" style={{ fontSize: 10, display: "inline", padding: "2px 6px" }} onClick={() => exportData("json")}>JSON</button>
               </div>
               <div style={{ marginTop: 12 }}>
-                <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(s => !s)}>
-                  Clear all data
-                </button>
+                <div style={{ display: "flex", gap: 20 }}>
+                  <button className="ghost-btn danger" style={{ fontSize: 10 }} onClick={() => setShowClearConfirm(s => !s)}>
+                    Clear all data
+                  </button>
+                  <button className="ghost-btn" style={{ fontSize: 10 }} onClick={logout}>
+                    Log out ({currentUser && currentUser.username})
+                  </button>
+                </div>
                 {showClearConfirm && (
                   <div style={{ marginTop: 10 }}>
                     <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>
